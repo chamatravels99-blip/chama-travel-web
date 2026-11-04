@@ -431,3 +431,12 @@ footer a:hover {
 .animation-delay-300 {
   animation-delay: 300ms;
 }
+/* Hide Netlify Badge on Free Plans */
+#netlify-badge,
+iframe[src*="netlify"],
+.netlify-badge {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
