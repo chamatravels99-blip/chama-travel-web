@@ -1,0 +1,433 @@
+@import "tailwindcss";
+
+:root {
+  --chama-blue: #0b5ed7;
+  --chama-blue-dark: #084298;
+  --chama-blue-light: #eaf2ff;
+  --chama-black: #111111;
+  --chama-white: #ffffff;
+  --chama-light: #f5f8fc;
+  --chama-gray: #667085;
+  --chama-border: #e5e7eb;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--chama-white);
+  color: var(--chama-black);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+/* Keep links neutral.
+   Individual Tailwind classes control their colors. */
+a {
+  text-decoration: none;
+}
+
+/* =========================
+   GLOBAL TRANSITIONS
+========================= */
+
+a,
+button {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+/* =========================
+   HERO
+========================= */
+
+.hero-section {
+  position: relative;
+  min-height: 680px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.78),
+      rgba(0, 0, 0, 0.45),
+      rgba(0, 0, 0, 0.15)
+    ),
+    url("/images/1307254.jpg")
+      center/cover no-repeat;
+}
+
+.hero-content {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 100px 24px;
+  color: white;
+}
+
+.hero-content h1 {
+  max-width: 800px;
+  margin-bottom: 25px;
+  font-size: clamp(42px, 6vw, 76px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -2px;
+}
+
+.hero-content p {
+  max-width: 680px;
+  font-size: 19px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 25px;
+  border: 2px solid var(--chama-blue);
+  border-radius: 999px;
+  background: var(--chama-blue);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(11, 94, 215, 0.25);
+}
+
+.btn-primary:hover {
+  background: var(--chama-blue-dark);
+  border-color: var(--chama-blue-dark);
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 25px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: transparent;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.btn-secondary:hover {
+  background: #ffffff;
+  color: var(--chama-black);
+}
+
+/* =========================
+   SECTIONS
+========================= */
+
+.section {
+  padding: 90px 24px;
+}
+
+.section-light {
+  background: var(--chama-light);
+}
+
+.section-title {
+  max-width: 750px;
+  margin: 0 auto 55px;
+  text-align: center;
+}
+
+.section-title h2 {
+  margin-bottom: 15px;
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.section-title p {
+  color: var(--chama-gray);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+/* =========================
+   SERVICE CARDS
+========================= */
+
+.service-card {
+  height: 100%;
+  padding: 30px;
+  border: 1px solid var(--chama-border);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.service-card:hover {
+  border-color: rgba(11, 94, 215, 0.35);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.1);
+  transform: translateY(-7px);
+}
+
+.service-icon {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  border-radius: 14px;
+  background: var(--chama-blue-light);
+  color: var(--chama-blue);
+  font-size: 26px;
+}
+
+.service-card h3 {
+  margin-bottom: 10px;
+  font-size: 21px;
+  font-weight: 750;
+}
+
+.service-card p {
+  color: var(--chama-gray);
+  line-height: 1.7;
+}
+
+/* =========================
+   TOUR CARDS
+========================= */
+
+.tour-card {
+  overflow: hidden;
+  border: 1px solid var(--chama-border);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.tour-card:hover {
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px);
+}
+
+.tour-image {
+  height: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9eef5;
+  color: #7a8699;
+  font-weight: 600;
+}
+
+.tour-content {
+  padding: 25px;
+}
+
+.tour-content h3 {
+  margin-bottom: 10px;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.tour-content p {
+  color: var(--chama-gray);
+  line-height: 1.65;
+}
+
+.tour-meta {
+  margin-bottom: 15px;
+  color: var(--chama-blue);
+  font-weight: 700;
+}
+
+/* =========================
+   WHATSAPP CTA
+========================= */
+
+.whatsapp-cta {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #25d366;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 10px 28px rgba(37, 211, 102, 0.2),
+    0 8px 25px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.whatsapp-cta:hover {
+  background: #20bd5a;
+  color: #ffffff;
+  transform: translateY(-3px) scale(1.02);
+}
+
+/* =========================
+   CONTACT CTA
+========================= */
+
+.contact-section {
+  background: linear-gradient(
+    135deg,
+    var(--chama-blue),
+    var(--chama-blue-dark)
+  );
+  color: #ffffff;
+  text-align: center;
+}
+
+.contact-section p {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+footer {
+  padding: 60px 24px 25px;
+  background: #0b0b0b;
+  color: #ffffff;
+}
+
+footer a {
+  color: #d1d5db;
+}
+
+footer a:hover {
+  color: #ffffff;
+}
+
+.footer-bottom {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #2b2b2b;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 768px) {
+  .hero-section {
+    min-height: 620px;
+    background-position: center;
+  }
+
+  .hero-content {
+    padding: 80px 20px;
+  }
+
+  .hero-content h1 {
+    font-size: 44px;
+    letter-spacing: -1px;
+  }
+
+  .hero-content p {
+    font-size: 16px;
+  }
+
+  .section {
+    padding: 65px 20px;
+  }
+
+  .section-title {
+    margin-bottom: 35px;
+  }
+
+  .service-card {
+    padding: 24px;
+  }
+
+  .tour-image {
+    height: 200px;
+  }
+
+  .whatsapp-cta {
+    right: 15px;
+    bottom: 15px;
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-content h1 {
+    font-size: 38px;
+  }
+
+  .hero-content p {
+    font-size: 15px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+  }
+
+  .whatsapp-cta {
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .whatsapp-cta::before {
+    content: "◉";
+    font-size: 24px;
+  }
+}
+/* =========================
+   CUSTOM ANIMATIONS
+========================= */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 延迟 (Delay) සඳහා අතිරේක classes අවශ්‍ය නම් */
+.animation-delay-150 {
+  animation-delay: 150ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
