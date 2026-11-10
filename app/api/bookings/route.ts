@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthSessionMissingError } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase/server';
 import { isSameOriginRequest } from '@/lib/server/authorization';
 
@@ -299,7 +300,8 @@ export async function POST(request: Request) {
     const booking = validateBody(await readJson(request));
     const supabase = await createClient();
     const { error: userError } = await supabase.auth.getUser();
-    if (userError) {
+    // Guests have no session; getUser() reports that as AuthSessionMissingError, which is not a failure.
+    if (userError && !isAuthSessionMissingError(userError)) {
       console.error('Unable to verify booking session.', userError.code);
       return NextResponse.json({ success: false, error: 'Could not verify your session.' }, { status: 503 });
     }
