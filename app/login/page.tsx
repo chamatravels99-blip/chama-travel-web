@@ -5,7 +5,37 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Compass, Mail, Lock, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+
+function getRoleLanding(roles: string[]) {
+  if (roles.some((role) => ['super_admin', 'admin', 'operator'].includes(role))) {
+    return '/admin/dashboard';
+  }
+  if (roles.includes('driver')) return '/driver/dashboard';
+  if (roles.includes('customer')) return '/customer/dashboard';
+  return null;
+}
+
+function getAuthorizedRedirectTo(redirectTo: string | null, roles: string[]) {
+  if (!redirectTo) return null;
+
+  try {
+    const target = new URL(redirectTo, window.location.origin);
+    if (target.origin !== window.location.origin) return null;
+
+    const isAdminRoute = target.pathname === '/admin' || target.pathname.startsWith('/admin/');
+    const isDriverRoute = target.pathname === '/driver' || target.pathname.startsWith('/driver/');
+    const isCustomerRoute = target.pathname === '/customer' || target.pathname.startsWith('/customer/');
+    const allowed =
+      (isAdminRoute && roles.some((role) => ['admin', 'super_admin', 'operator'].includes(role))) ||
+      (isDriverRoute && roles.some((role) => ['driver', 'admin', 'super_admin'].includes(role))) ||
+      (isCustomerRoute && roles.includes('customer'));
+
+    return allowed ? `${target.pathname}${target.search}${target.hash}` : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +52,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setErrorMsg('');
+    let navigating = false;
 
     try {
       const loginEmail = identifier.trim();
@@ -33,6 +64,7 @@ export default function LoginPage() {
         throw new Error('Please enter your password.');
       }
 
+      const supabase = createClient();
       const { data: authData, error: authError } =
         await supabase.auth.signInWithPassword({
           email: loginEmail,
@@ -46,7 +78,9 @@ export default function LoginPage() {
       }
 
       const { data: roleData, error: roleError } = await supabase.rpc('get_my_roles');
-      const roles = Array.isArray(roleData) ? roleData : [];
+      const roles = Array.isArray(roleData)
+        ? roleData.filter((role): role is string => typeof role === 'string')
+        : [];
       if (roleError || roles.length === 0) {
         await supabase.auth.signOut();
         throw new Error(
@@ -54,19 +88,16 @@ export default function LoginPage() {
         );
       }
 
-      if (roles.includes('super_admin') || roles.includes('admin') || roles.includes('operator')) {
-        router.replace('/admin/dashboard');
-      } else if (roles.includes('driver')) {
-        router.replace('/driver/dashboard');
-      } else if (roles.includes('customer')) {
-        router.replace('/customer/dashboard');
-      } else {
+      const fallbackRoute = getRoleLanding(roles);
+      if (!fallbackRoute) {
         await supabase.auth.signOut();
         throw new Error('Invalid user role. Please contact the administrator.');
       }
-
+      const requestedPath = new URLSearchParams(window.location.search).get('redirectTo');
+      const destination = getAuthorizedRedirectTo(requestedPath, roles) ?? fallbackRoute;
+      navigating = true;
+      router.replace(destination);
       router.refresh();
-
     } catch (err: unknown) {
       const message =
         err instanceof Error
@@ -74,7 +105,10 @@ export default function LoginPage() {
           : 'An unexpected error occurred during login.';
 
       setErrorMsg(message);
-      setLoading(false);
+    } finally {
+      if (!navigating) {
+        setLoading(false);
+      }
     }
   };
 

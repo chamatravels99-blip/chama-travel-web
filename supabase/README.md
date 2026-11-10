@@ -55,14 +55,22 @@ Dashboard migration workflow:
     - Adds Admin-managed driver settlements for completed assignments, records
       payout status once, appends booking events, and provides driver/admin
       settlement reads.
+11. `migrations/202611070001_admin_user_management.sql`
+    - Adds protected Admin user listing and account management operations.
+12. `migrations/202611070002_atomic_staff_provisioning.sql`
+    - Adds trusted metadata handling for atomic staff account provisioning.
+13. `migrations/202611080001_optional_booking_end_time.sql`
+    - Updates `create_booking` to allow a trip leg without a planned end time,
+      while retaining pickup-time, leg-order, authorization, idempotency, and
+      booking-reference checks.
 
 These files are ordered and intended to run once, in a migration-managed
 workflow. They are not designed to be pasted piecemeal into an already
 populated production schema. Do not use `IF NOT EXISTS` as a way to conceal
 partial or out-of-order application.
 
-Migrations 0009 and 0010 are application implementation drafts and have not
-been applied to any Supabase project. Review and test them in an isolated
+Migrations 0009, 0010, and 202611080001 are application implementation drafts
+and have not been applied to any Supabase project. Review and test them in an isolated
 database before scheduling production application.
 
 ## Required Supabase settings and access assumptions
@@ -155,7 +163,7 @@ later registration. No guest booking-reference lookup is provided. No
 
 After applying in an isolated test project, verify:
 
-- All ten migrations are recorded as applied in the expected order.
+- All migrations are recorded as applied in the expected order.
 - Tables exist: `roles`, `profiles`, `user_roles`, `vehicle_categories`,
   `vehicles`, `pricing_packages`, `pricing_rules`, `bookings`, `booking_legs`,
   `booking_events`, `booking_assignments`, `booking_quotes`,

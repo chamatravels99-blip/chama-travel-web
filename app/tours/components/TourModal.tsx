@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
-import { Tour } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import BookingForm from "@/components/BookingForm";
+import type { Tour } from "../types";
 
 interface TourModalProps {
   tour: Tour | null;
@@ -33,7 +34,15 @@ export default function TourModal({ tour, isOpen, onClose }: TourModalProps) {
     specialRequests: "",
   });
 
-  const [bookingUnavailable, setBookingUnavailable] = useState(false);
+  const [bookingResult, setBookingResult] = useState<{ bookingId: string; reference: string } | null>(null);
+  const [bookingError, setBookingError] = useState('');
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setBookingResult(null);
+    setBookingError('');
+    onClose();
+  }, [onClose]);
 
   // Lock body scroll and handle Escape key
   useEffect(() => {
@@ -49,7 +58,7 @@ export default function TourModal({ tour, isOpen, onClose }: TourModalProps) {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        handleClose();
         return;
       }
 
@@ -82,10 +91,11 @@ export default function TourModal({ tour, isOpen, onClose }: TourModalProps) {
       window.removeEventListener("keydown", handleKeyDown);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onClose]);
+  }, [handleClose, isOpen]);
 
   if (!isOpen || !tour) return null;
 
+  const displayTab: string = activeTab;
   const currentVehicle =
     (selectedVehicleType &&
       tour.vehiclePricing.find((v) => v.vehicleType === selectedVehicleType)) ||
@@ -93,7 +103,8 @@ export default function TourModal({ tour, isOpen, onClose }: TourModalProps) {
 
   const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setBookingUnavailable(true);
+    setBookingError('Continue with the shared booking form to submit your request.');
+    setBookingSubmitting(false);
   };
 
   const whatsappMessage = encodeURIComponent(
@@ -104,6 +115,38 @@ Please let me know availability and how to proceed.`
 
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 
+  if (activeTab === "booking") {
+    const itinerary = tour.itinerary
+      .map((item) => `Day ${item.day}: ${item.route}`)
+      .join("; ");
+    const notes = [
+      `Package duration: ${tour.duration}`,
+      `Itinerary: ${tour.routeHighlights.join(" -> ")}`,
+      itinerary ? `Daily routes: ${itinerary}` : "",
+      `Displayed package price: USD ${currentVehicle.totalPriceUSD} total, subject to confirmation.`,
+    ].filter(Boolean).join("\n").slice(0, 800);
+
+    return (
+      <BookingForm
+        isOpen={isOpen}
+        onClose={() => setActiveTab("itinerary")}
+        submitLabel="Continue Booking"
+        heading={`Book ${tour.title}`}
+        preserveBookingTitleOnServiceChange
+        initialValues={{
+          service_type: tour.category === "Day Trips" ? "day_trip" : "round_tour",
+          booking_title: tour.title,
+          vehicle_type: currentVehicle.vehicleType,
+          pickup_location: tour.routeHighlights[0] ?? "",
+          dropoff_location: tour.routeHighlights[tour.routeHighlights.length - 1] ?? "",
+          passengers: 2,
+          luggage: 0,
+          notes,
+        }}
+      />
+    );
+  }
+
   return (
     <div
       role="dialog"
@@ -112,7 +155,7 @@ Please let me know availability and how to proceed.`
       ref={dialogRef}
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto bg-black/80 backdrop-blur-md transition-opacity duration-300"
-      onClick={onClose}
+      onClick={handleClose}
     >
       {/* Modal Dialog Content Container */}
       <div
@@ -137,7 +180,7 @@ Please let me know availability and how to proceed.`
           {/* Close Button */}
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close tour details modal"
             className="absolute top-4 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/50 text-xl font-bold text-white backdrop-blur-md transition hover:bg-white hover:text-black focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-300"
           >
@@ -504,37 +547,33 @@ Please let me know availability and how to proceed.`
           )}
 
           {/* TAB 4: BOOKING / RESERVATION */}
-          {activeTab === "booking" && (
+          {displayTab === "booking" && (
             <div className="space-y-6">
-              {bookingUnavailable ? (
-                <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-8 text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-500 text-3xl text-white shadow-lg shadow-amber-600/30">
-                    !
+              {bookingResult ? (
+                <div className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-8 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 text-3xl text-white shadow-lg shadow-emerald-600/30">
+                    ✓
                   </div>
-                  <h3 className="mt-4 text-2xl font-black text-amber-950">
-                    Online Booking Unavailable
+                  <h3 className="mt-4 text-2xl font-black text-emerald-950">
+                    Booking Completed!
                   </h3>
-                  <p className="mx-auto mt-2 max-w-md text-sm text-amber-900">
-                    Your details have not been submitted. Continue on WhatsApp to
-                    discuss availability and send your tour inquiry.
+                  <p className="mx-auto mt-2 max-w-md text-sm text-emerald-900">
+                    Your booking request has been received by Chama Travels.
                   </p>
-
-                  <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                  <p className="mt-3 text-sm font-bold text-emerald-950">
+                    Booking reference: {bookingResult.reference}
+                  </p>
+                  <div className="mt-6 flex justify-center">
                     <a
-                      href={whatsappUrl}
+                      href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+                        `Hello Chama Travels, I have submitted booking ${bookingResult.reference} for ${tour.title} (${tour.duration}), ${formData.passengers} passenger(s), from ${tour.routeHighlights[0]} to ${tour.routeHighlights[tour.routeHighlights.length - 1]}.`
+                      )}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-3 text-sm font-bold text-white shadow-md hover:bg-[#20bd5a]"
                     >
-                      <span>Continue to WhatsApp</span>
+                      Contact Us on WhatsApp
                     </a>
-                    <button
-                      type="button"
-                      onClick={() => setBookingUnavailable(false)}
-                      className="rounded-full border border-amber-300 bg-white px-6 py-3 text-sm font-bold text-amber-900 hover:bg-amber-100"
-                    >
-                      Back to Form
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -544,12 +583,17 @@ Please let me know availability and how to proceed.`
                       Reserve Your Tour with Chama Travels
                     </h3>
                     <p className="mt-1 text-xs sm:text-sm text-zinc-600">
-                      Online booking is not connected yet. Use WhatsApp to contact us
-                      about availability; submitting this form will not send your details.
+                      Continue to submit your tour request. We&apos;ll ask for the pickup and
+                      expected end times needed to complete the booking.
                     </p>
                   </div>
 
                   <form onSubmit={handleBookingSubmit} className="mt-5 space-y-4">
+                    {bookingError && (
+                      <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-800">
+                        {bookingError}
+                      </p>
+                    )}
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label htmlFor="tour-full-name" className="block text-xs font-bold text-zinc-700">
@@ -631,7 +675,7 @@ Please let me know availability and how to proceed.`
                           type="number"
                           id="tour-passengers"
                           min="1"
-                          max="20"
+                          max="14"
                           required
                           value={formData.passengers}
                           onChange={(e) =>
@@ -691,12 +735,13 @@ Please let me know availability and how to proceed.`
                     <div className="pt-2">
                       <button
                         type="submit"
-                        className="w-full rounded-full bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 disabled:opacity-50"
+                        disabled={bookingSubmitting}
+                        className="w-full rounded-full bg-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Show WhatsApp Option
+                        {bookingSubmitting ? "Submitting booking..." : "Continue to booking form"}
                       </button>
                       <p className="mt-2 text-center text-[11px] text-zinc-500">
-                        Your booking details are not sent by this form.
+                        Your booking request is sent securely when you continue.
                       </p>
                     </div>
                   </form>

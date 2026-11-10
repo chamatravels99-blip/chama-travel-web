@@ -123,8 +123,10 @@ function validateBody(value: unknown) {
   const passengers = Number(body.passengers);
   const luggage = body.luggage === undefined ? 0 : Number(body.luggage);
 
+  if (name.length < 2) throw new RequestError('Enter a valid name.', 400);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new RequestError('Enter a valid email address.', 400);
-  if (!/^\+?[0-9\s()-]+$/.test(phone) || phone.replace(/\D/g, '').length < 7) {
+  const phoneDigits = phone.replace(/\D/g, '').length;
+  if (!/^\+?[0-9\s()-]+$/.test(phone) || phoneDigits < 7 || phoneDigits > 15) {
     throw new RequestError('Enter a valid phone number.', 400);
   }
   if (!SERVICE_TYPES.has(serviceType)) throw new RequestError('Choose a supported service.', 400);
@@ -144,6 +146,7 @@ function validateBody(value: unknown) {
       throw new RequestError('A multi-leg journey needs between 2 and 8 itinerary legs.', 400);
     }
     let previousEnd: string | null = null;
+    let previousPickup: string | null = null;
     legs = body.legs.map((item, index) => {
       if (typeof item !== 'object' || item === null || Array.isArray(item)) {
         throw new RequestError('Each itinerary leg must be an object.', 400);
@@ -155,12 +158,20 @@ function validateBody(value: unknown) {
         requiredText(leg, 'pickup_date', 10),
         requiredText(leg, 'pickup_time', 5)
       );
-      const legEndAt = parseLocalColomboDate(
-        requiredText(leg, 'end_date', 10),
-        requiredText(leg, 'end_time', 5)
-      );
-      if (new Date(legEndAt) <= new Date(legPickupAt) ||
-          (previousEnd !== null && new Date(legPickupAt) < new Date(previousEnd))) {
+      const hasEndDate = typeof leg.end_date === 'string' && leg.end_date.trim().length > 0;
+      const hasEndTime = typeof leg.end_time === 'string' && leg.end_time.trim().length > 0;
+      if (hasEndDate !== hasEndTime) {
+        throw new RequestError('Enter both the expected end date and time, or leave both blank.', 400);
+      }
+      const legEndAt = hasEndDate && hasEndTime
+        ? parseLocalColomboDate(
+            requiredText(leg, 'end_date', 10),
+            requiredText(leg, 'end_time', 5)
+          )
+        : null;
+      const previousScheduledTime = previousEnd ?? previousPickup;
+      if ((legEndAt && new Date(legEndAt) <= new Date(legPickupAt)) ||
+          (previousScheduledTime !== null && new Date(legPickupAt) < new Date(previousScheduledTime))) {
         throw new RequestError('Each leg must end after it starts and follow the prior leg schedule.', 400);
       }
       const flightNumber = typeof leg.flight_number === 'string' ? leg.flight_number.trim().slice(0, 20) || null : null;
@@ -179,6 +190,7 @@ function validateBody(value: unknown) {
         throw new RequestError('Enter a flight number and arrival time no later than its pickup.', 400);
       }
       previousEnd = legEndAt;
+      previousPickup = legPickupAt;
       return {
         sequence_no: index + 1,
         pickup_location: legPickup,
@@ -192,11 +204,18 @@ function validateBody(value: unknown) {
     });
   } else {
     const pickupAt = parseLocalColomboDate(pickupDate, pickupTime);
-    const endAt = parseLocalColomboDate(
-      requiredText(body, 'end_date', 10),
-      requiredText(body, 'end_time', 5)
-    );
-    if (new Date(endAt) <= new Date(pickupAt)) {
+    const hasEndDate = typeof body.end_date === 'string' && body.end_date.trim().length > 0;
+    const hasEndTime = typeof body.end_time === 'string' && body.end_time.trim().length > 0;
+    if (hasEndDate !== hasEndTime) {
+      throw new RequestError('Enter both the expected end date and time, or leave both blank.', 400);
+    }
+    const endAt = hasEndDate && hasEndTime
+      ? parseLocalColomboDate(
+          requiredText(body, 'end_date', 10),
+          requiredText(body, 'end_time', 5)
+        )
+      : null;
+    if (endAt && new Date(endAt) <= new Date(pickupAt)) {
       throw new RequestError('Expected trip end must follow pickup.', 400);
     }
     const flightNumber = typeof body.flight_number === 'string' ? body.flight_number.trim().slice(0, 20) || null : null;
@@ -229,8 +248,8 @@ function validateBody(value: unknown) {
     const returnDate = requiredText(body, 'return_date', 10);
     const returnTime = requiredText(body, 'return_time', 5);
     const returnPickupAt = parseLocalColomboDate(returnDate, returnTime);
-    if (new Date(returnPickupAt) <= new Date(pickupAt) || new Date(endAt) <= new Date(returnPickupAt)) {
-      throw new RequestError('Return pickup and expected end must follow the first pickup.', 400);
+    if (new Date(returnPickupAt) <= new Date(pickupAt) || (endAt && new Date(endAt) <= new Date(returnPickupAt))) {
+      throw new RequestError('Return pickup and any expected end must follow the first pickup.', 400);
     }
       legs = [
           {
@@ -301,10 +320,31 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      console.error('Booking creation failed.', error.code);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Booking creation failed.', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+      } else {
+        console.error('Booking creation failed.', error.code);
+      }
       const status = error.code === '42501' ? 403 : 400;
       return NextResponse.json(
-        { success: false, error: 'We could not submit this booking. Please review the details and try again.' },
+        {
+          success: false,
+          error: process.env.NODE_ENV === 'development'
+            ? error.message
+            : 'We could not submit this booking. Please review the details and try again.',
+          ...(process.env.NODE_ENV === 'development' && {
+            diagnostic: {
+              code: error.code,
+              details: error.details,
+              hint: error.hint,
+            },
+          }),
+        },
         { status }
       );
     }
@@ -316,6 +356,13 @@ export async function POST(request: Request) {
     const bookingRef = result && typeof result === 'object' && 'booking_ref' in result
       ? result.booking_ref
       : null;
+    if (typeof bookingId !== 'string' || !bookingId || typeof bookingRef !== 'string' || !bookingRef) {
+      console.error('Booking creation returned no saved booking ID or booking reference.');
+      return NextResponse.json(
+        { success: false, error: 'The booking was not confirmed. Please try again.' },
+        { status: 502 }
+      );
+    }
 
     console.info('Booking created.', { bookingId });
     return NextResponse.json(

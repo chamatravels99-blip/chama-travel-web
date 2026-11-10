@@ -14,16 +14,22 @@ import { ServiceType, VehicleCategory } from "./types";
 export default function ServicesPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceType>("Airport Transfers");
+  const [selectedServiceTitle, setSelectedServiceTitle] = useState(
+    "Airport Transfers (BIA Katunayake / Mattala)"
+  );
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleCategory>(
     "Sedan (Toyota Axio/Prius)"
   );
 
-  const handleOpenDrawerWithService = (serviceType: ServiceType) => {
+  const handleOpenDrawerWithService = (serviceType: ServiceType, serviceTitle: string) => {
     setSelectedService(serviceType);
+    setSelectedServiceTitle(serviceTitle);
     setIsDrawerOpen(true);
   };
 
   const handleOpenDrawerWithVehicle = (vehicleCategory: VehicleCategory) => {
+    setSelectedService("Islandwide Private Vehicle Hire");
+    setSelectedServiceTitle("Islandwide Private Vehicle Hire with Driver-Guide");
     setSelectedVehicle(vehicleCategory);
     setIsDrawerOpen(true);
   };
@@ -123,6 +129,7 @@ export default function ServicesPage() {
         onClose={() => setIsDrawerOpen(false)}
         initialServiceType={selectedService}
         initialVehicleCategory={selectedVehicle}
+        serviceTitle={selectedServiceTitle}
       />
 
       {/* Floating WhatsApp Quick Action Button */}

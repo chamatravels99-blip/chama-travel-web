@@ -40,11 +40,20 @@ export async function updateSession(request: NextRequest) {
           : null;
 
   if (requiredRoles) {
+    response.headers.set('Cache-Control', 'private, no-store');
+
+    const redirectWithSessionCookies = (url: URL) => {
+      const redirectResponse = NextResponse.redirect(url);
+      response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+      redirectResponse.headers.set('Cache-Control', 'private, no-store');
+      return redirectResponse;
+    };
+
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
-      url.searchParams.set('redirectTo', pathname);
-      return NextResponse.redirect(url);
+      url.searchParams.set('redirectTo', `${pathname}${request.nextUrl.search}`);
+      return redirectWithSessionCookies(url);
     }
 
     const { data: roles, error: roleError } = await supabase.rpc('get_my_roles');
@@ -56,7 +65,7 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
       url.searchParams.set('error', 'unauthorized');
-      return NextResponse.redirect(url);
+      return redirectWithSessionCookies(url);
     }
   }
 

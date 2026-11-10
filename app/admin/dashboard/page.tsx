@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import Navbar from '@/components/shared/Navbar';
 import { Activity, Car, Clipboard, RefreshCw, Search, ShieldCheck, UserPlus } from 'lucide-react';
 
 type Leg = {
@@ -56,8 +54,23 @@ function quoteExpiryAfter48Hours() {
   return new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 }
 
+function statusBadgeClasses(status: string) {
+  if (['pending', 'reviewing'].includes(status)) {
+    return 'bg-amber-50 text-amber-800 ring-amber-600/15';
+  }
+  if (['confirmed', 'accepted', 'active', 'assigned', 'completed'].includes(status)) {
+    return 'bg-emerald-50 text-emerald-800 ring-emerald-600/15';
+  }
+  if (['quoted', 'issued'].includes(status)) {
+    return 'bg-blue-50 text-blue-800 ring-blue-600/15';
+  }
+  if (['cancelled', 'expired', 'rejected'].includes(status)) {
+    return 'bg-rose-50 text-rose-800 ring-rose-600/15';
+  }
+  return 'bg-slate-100 text-slate-700 ring-slate-600/10';
+}
+
 export default function AdminDashboard() {
-  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -186,55 +199,58 @@ export default function AdminDashboard() {
     }
   }
 
-  function changeRole(role: 'Admin' | 'Driver' | 'Customer') {
-    if (role === 'Driver') router.push('/driver/dashboard');
-    if (role === 'Customer') router.push('/customer/dashboard');
-  }
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans">
-      <Navbar currentRole="Admin" onRoleChange={changeRole} />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <header className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-widest">
-              <ShieldCheck className="w-4 h-4" /> Booking operations
+    <div className="bg-slate-50 font-sans text-slate-800">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <header className="flex flex-col gap-5 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-7 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-800">
+              <ShieldCheck className="h-4 w-4" /> Booking operations
             </div>
-            <h1 className="text-2xl font-black text-slate-900 mt-1">Operations Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-1">Review requests, issue server-calculated quotes and dispatch confirmed bookings.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Admin Operations Console</h1>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+                <span aria-hidden="true" className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </span>
+                System Live
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">Real-time driver assignment and tourist transfers</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isAdmin && <>
-              <Link href="/admin/payments" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold hover:bg-slate-200">Payments</Link>
-              <Link href="/admin/fleet" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold hover:bg-slate-200">Fleet</Link>
-              <Link href="/admin/pricing" className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold hover:bg-slate-200">Pricing</Link>
-              <button onClick={() => setShowDriverForm((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+              <Link href="/admin/payments" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Payments</Link>
+              <Link href="/admin/fleet" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Fleet</Link>
+              <Link href="/admin/pricing" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Pricing</Link>
+              <button type="button" onClick={() => setShowDriverForm((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
                 <UserPlus className="w-4 h-4" /> Add driver
               </button>
             </>}
-            <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">
-              <RefreshCw className="w-4 h-4" /> Refresh
+            <button type="button" onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">
+              <RefreshCw className="h-4 w-4" /> Refresh
             </button>
           </div>
         </header>
 
         {showDriverForm && isAdmin && (
-          <form onSubmit={createDriver} className="bg-white rounded-2xl border border-slate-200 p-5 grid grid-cols-1 md:grid-cols-5 gap-3">
-            <input required minLength={2} maxLength={120} placeholder="Full name" value={driverForm.full_name} onChange={(event) => setDriverForm({ ...driverForm, full_name: event.target.value })} className="rounded-xl border border-slate-200 p-3 text-sm" />
-            <input required type="email" placeholder="Email" value={driverForm.email} onChange={(event) => setDriverForm({ ...driverForm, email: event.target.value })} className="rounded-xl border border-slate-200 p-3 text-sm" />
-            <input type="tel" placeholder="Phone (optional)" value={driverForm.phone} onChange={(event) => setDriverForm({ ...driverForm, phone: event.target.value })} className="rounded-xl border border-slate-200 p-3 text-sm" />
-            <input required type="password" minLength={12} maxLength={128} placeholder="Temporary password (12+ chars)" value={driverForm.password} onChange={(event) => setDriverForm({ ...driverForm, password: event.target.value })} className="rounded-xl border border-slate-200 p-3 text-sm" />
-            <button disabled={savingDriver} className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{savingDriver ? 'Creating…' : 'Create driver'}</button>
+          <form onSubmit={createDriver} className="grid grid-cols-1 gap-3 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
+            <input required minLength={2} maxLength={120} placeholder="Full name" value={driverForm.full_name} onChange={(event) => setDriverForm({ ...driverForm, full_name: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input required type="email" placeholder="Email" value={driverForm.email} onChange={(event) => setDriverForm({ ...driverForm, email: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input type="tel" placeholder="Phone (optional)" value={driverForm.phone} onChange={(event) => setDriverForm({ ...driverForm, phone: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input required type="password" minLength={12} maxLength={128} placeholder="Temporary password (12+ chars)" value={driverForm.password} onChange={(event) => setDriverForm({ ...driverForm, password: event.target.value })} className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <button disabled={savingDriver} className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:opacity-50">{savingDriver ? 'Creating…' : 'Create driver'}</button>
           </form>
         )}
 
         {(error || notice) && (
-          <div className={`rounded-2xl border p-4 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-900'}`}>
+          <div role={error ? 'alert' : 'status'} className={`rounded-2xl border p-4 text-sm ${error ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-blue-200 bg-blue-50 text-blue-900'}`}>
             {error || notice}
             {acceptanceUrl && (
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <a className="break-all font-semibold underline" href={acceptanceUrl} target="_blank" rel="noreferrer">Guest acceptance link</a>
-                <button className="inline-flex items-center gap-1 font-bold" onClick={() => void navigator.clipboard.writeText(acceptanceUrl)}>
+                <a className="break-all font-semibold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" href={acceptanceUrl} target="_blank" rel="noreferrer">Guest acceptance link</a>
+                <button type="button" className="inline-flex items-center gap-1 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={() => void navigator.clipboard.writeText(acceptanceUrl)}>
                   <Clipboard className="h-4 w-4" /> Copy link
                 </button>
               </div>
@@ -242,37 +258,43 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <section aria-label="Booking summary" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            ['All bookings', bookings.length],
-            ['Needs review', bookings.filter((booking) => ['pending', 'reviewing'].includes(booking.booking_status)).length],
-            ['Awaiting acceptance', bookings.filter((booking) => booking.booking_status === 'quoted').length],
-            ['Confirmed / dispatch', bookings.filter((booking) => booking.booking_status === 'confirmed').length],
-          ].map(([label, count]) => (
-            <div key={label} className="bg-white rounded-2xl border border-slate-200 p-4">
-              <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
-              <p className="mt-1 text-2xl font-black text-slate-900">{count}</p>
+            { label: 'All bookings', count: bookings.length, icon: Clipboard, color: 'bg-blue-50 text-blue-700' },
+            { label: 'Needs review', count: bookings.filter((booking) => ['pending', 'reviewing'].includes(booking.booking_status)).length, icon: Activity, color: 'bg-amber-50 text-amber-700' },
+            { label: 'Awaiting acceptance', count: bookings.filter((booking) => booking.booking_status === 'quoted').length, icon: Search, color: 'bg-slate-100 text-slate-700' },
+            { label: 'Confirmed / dispatch', count: bookings.filter((booking) => booking.booking_status === 'confirmed').length, icon: Car, color: 'bg-emerald-50 text-emerald-700' },
+          ].map(({ label, count, icon: Icon, color }) => (
+            <div key={label} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+              </div>
+              <p className="mt-3 text-3xl font-black tracking-tight text-slate-950">{count}</p>
             </div>
           ))}
         </section>
 
-        <section className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="flex flex-col justify-between gap-4 border-b border-slate-200/80 p-5 sm:flex-row sm:items-center sm:p-6">
             <div>
-              <h2 className="font-extrabold text-slate-900">Bookings</h2>
-              <p className="text-xs text-slate-500 mt-1">Driver and vehicle assignments are checked for overlapping schedules in the database.</p>
+              <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Bookings</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Driver and vehicle assignments are checked for overlapping schedules in the database.</p>
             </div>
-            <div className="relative w-full sm:max-w-xs">
+            <label className="relative block w-full sm:max-w-sm">
+              <span className="sr-only">Search bookings by reference, customer or route</span>
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, customer or route" className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm" />
-            </div>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reference, customer or route" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            </label>
           </div>
           {loading ? (
-            <div className="p-10 text-center text-slate-500">Loading operations data…</div>
+            <div className="p-10 text-center text-sm text-slate-500">Loading operations data…</div>
           ) : error ? (
-            <div className="p-10 text-center text-red-700">{error}</div>
+          <div role="alert" className="p-10 text-center text-sm text-rose-800">{error}</div>
           ) : filteredBookings.length === 0 ? (
-            <div className="p-10 text-center text-slate-500">No bookings found.</div>
+          <div className="p-10 text-center text-sm text-slate-500">No bookings found.</div>
           ) : (
             <div className="divide-y divide-slate-100">
               {filteredBookings.map((booking) => {
@@ -280,29 +302,29 @@ export default function AdminDashboard() {
                 const latestQuote = booking.quotes[0];
                 const selection = assignments[booking.id] ?? { driver: '', vehicle: '' };
                 return (
-                  <article key={booking.id} className="p-5 space-y-4">
-                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                      <div className="space-y-2">
+                  <article key={booking.id} className="min-w-0 space-y-4 p-4 sm:p-5">
+                    <div className="flex min-w-0 flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                      <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-black text-slate-900">{booking.booking_ref}</span>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase">{booking.booking_status.replaceAll('_', ' ')}</span>
-                          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-700">{booking.service_type.replaceAll('_', ' ')} · {booking.journey_type.replaceAll('_', ' ')}</span>
+                          <span className="break-all font-black text-slate-950">{booking.booking_ref}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(booking.booking_status)}`}>{booking.booking_status.replaceAll('_', ' ')}</span>
+                          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-800 ring-1 ring-inset ring-blue-600/15">{booking.service_type.replaceAll('_', ' ')} · {booking.journey_type.replaceAll('_', ' ')}</span>
                         </div>
-                        <div className="text-sm font-bold">{booking.customer_name} · <a href={`tel:${booking.customer_phone}`} className="text-blue-700">{booking.customer_phone}</a></div>
-                        <p className="text-xs text-slate-500">{booking.customer_email} · {booking.passenger_count} passenger(s) · {booking.luggage_count} bag(s)</p>
+                        <div className="break-words text-sm font-bold text-slate-900">{booking.customer_name} · <a href={`tel:${booking.customer_phone}`} className="text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">{booking.customer_phone}</a></div>
+                        <p className="break-words text-xs leading-5 text-slate-600">{booking.customer_email} · {booking.passenger_count} passenger(s) · {booking.luggage_count} bag(s)</p>
                         {firstLeg && (
-                          <div className="text-sm text-slate-700">
+                          <div className="break-words text-sm text-slate-700">
                             <span className="font-semibold">{firstLeg.pickup_location}</span> → <span className="font-semibold">{firstLeg.dropoff_location}</span>
-                            <p className="text-xs text-slate-500">{new Date(firstLeg.pickup_at).toLocaleString()} · expected end {firstLeg.planned_end_at ? new Date(firstLeg.planned_end_at).toLocaleString() : 'not set'}</p>
+                            <p className="mt-1 break-words text-xs leading-5 text-slate-500">{new Date(firstLeg.pickup_at).toLocaleString()} · expected end {firstLeg.planned_end_at ? new Date(firstLeg.planned_end_at).toLocaleString() : 'not set'}</p>
                           </div>
                         )}
-                        {booking.customer_notes && <p className="text-xs text-slate-500">Note: {booking.customer_notes}</p>}
+                        {booking.customer_notes && <p className="break-words text-xs leading-5 text-slate-600">Note: {booking.customer_notes}</p>}
                       </div>
-                      <div className="flex flex-col items-start lg:items-end gap-2">
-                        {latestQuote && <span className="text-sm font-bold">{latestQuote.currency} {Number(latestQuote.total).toFixed(2)} · quote #{latestQuote.revision} ({latestQuote.quote_status})</span>}
-                        {booking.assignment && <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Car className="h-4 w-4" /> {booking.assignment.assignment_status}</span>}
+                      <div className="flex min-w-0 flex-col items-start gap-2 lg:items-end">
+                        {latestQuote && <span className="break-words text-sm font-bold text-slate-800">{latestQuote.currency} {Number(latestQuote.total).toFixed(2)} · quote #{latestQuote.revision} <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(latestQuote.quote_status)}`}>{latestQuote.quote_status}</span></span>}
+                        {booking.assignment && <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusBadgeClasses(booking.assignment.assignment_status)}`}><Car className="h-4 w-4" /> {booking.assignment.assignment_status}</span>}
                         {(booking.booking_status === 'pending' || booking.booking_status === 'reviewing' || booking.booking_status === 'quoted') && (
-                          <button onClick={() => void issueQuote(booking)} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+                          <button type="button" onClick={() => void issueQuote(booking)} className="rounded-xl bg-blue-700 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
                             {booking.booking_status === 'quoted' ? 'Reissue quote' : 'Issue quote'}
                           </button>
                         )}
@@ -310,21 +332,22 @@ export default function AdminDashboard() {
                     </div>
 
                     {booking.booking_status === 'confirmed' && !booking.assignment && (
-                      <div className="flex flex-col sm:flex-row gap-2 border-t border-slate-100 pt-3">
-                        <select aria-label="Select driver" value={selection.driver} onChange={(event) => setAssignments({ ...assignments, [booking.id]: { ...selection, driver: event.target.value } })} className="flex-1 rounded-xl border border-slate-200 p-2.5 text-sm">
+                      <div className="flex min-w-0 flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row">
+                        <select aria-label="Select driver" value={selection.driver} onChange={(event) => setAssignments({ ...assignments, [booking.id]: { ...selection, driver: event.target.value } })} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                           <option value="">Select driver</option>
                           {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.full_name}{driver.phone ? ` · ${driver.phone}` : ''}</option>)}
                         </select>
-                        <select aria-label="Select vehicle" value={selection.vehicle} onChange={(event) => setAssignments({ ...assignments, [booking.id]: { ...selection, vehicle: event.target.value } })} className="flex-1 rounded-xl border border-slate-200 p-2.5 text-sm">
+                        <select aria-label="Select vehicle" value={selection.vehicle} onChange={(event) => setAssignments({ ...assignments, [booking.id]: { ...selection, vehicle: event.target.value } })} className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
                           <option value="">Select vehicle</option>
                           {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.display_name} · {vehicle.category_name}</option>)}
                         </select>
-                        <button onClick={() => void assignBooking(booking)} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">Assign</button>
+                        <button type="button" onClick={() => void assignBooking(booking)} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">Assign</button>
                       </div>
                     )}
                     {booking.quotes.map((quote) => (
-                      <div key={quote.id} className="text-xs text-slate-500">
-                        Quote revision {quote.revision}: {quote.currency} {Number(quote.total).toFixed(2)} · {quote.quote_status}
+                      <div key={quote.id} className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <span>Quote revision {quote.revision}: {quote.currency} {Number(quote.total).toFixed(2)}</span>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(quote.quote_status)}`}>{quote.quote_status}</span>
                       </div>
                     ))}
                   </article>
@@ -334,8 +357,8 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Activity className="h-4 w-4" />
+        <div className="flex items-start gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-xs leading-5 text-slate-600">
+          <Activity className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
           Quotes are calculated from active server-side pricing rules. Customer acceptance confirms the booking automatically.
         </div>
       </main>

@@ -6,7 +6,10 @@ import { coreServicesData, whatsappNumber } from "../servicesData";
 import { ServiceItem } from "../types";
 
 interface CoreServicesProps {
-  onSelectServiceForQuote: (serviceType: ServiceItem["serviceType"]) => void;
+  onSelectServiceForQuote: (
+    serviceType: ServiceItem["serviceType"],
+    serviceTitle: string
+  ) => void;
 }
 
 export default function CoreServices({ onSelectServiceForQuote }: CoreServicesProps) {
@@ -128,7 +131,7 @@ export default function CoreServices({ onSelectServiceForQuote }: CoreServicesPr
               <div className="mt-8 flex flex-wrap items-center gap-3 pt-6 border-t border-zinc-100">
                 <button
                   type="button"
-                  onClick={() => onSelectServiceForQuote(activeService.serviceType)}
+                  onClick={() => onSelectServiceForQuote(activeService.serviceType, activeService.title)}
                   className="cursor-pointer rounded-full bg-blue-600 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-blue-900/20 transition hover:bg-blue-500 sm:text-sm"
                 >
                   Book / Request Quote Now →
@@ -214,7 +217,7 @@ export default function CoreServices({ onSelectServiceForQuote }: CoreServicesPr
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectServiceForQuote(service.serviceType);
+                      onSelectServiceForQuote(service.serviceType, service.title);
                     }}
                     className="cursor-pointer rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-600 hover:text-white transition"
                   >
