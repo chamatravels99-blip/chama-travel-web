@@ -20,9 +20,11 @@ import {
   ExternalLink,
   FileText,
   MapPin,
+  Plus,
   RefreshCw,
   Search,
   User,
+  UserPlus,
   X,
 } from 'lucide-react';
 
@@ -86,7 +88,16 @@ type Booking = {
   } | null;
 };
 
-type Driver = { id: string; full_name: string; phone: string | null };
+type Driver = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  license_number?: string | null;
+  driver_notes?: string | null;
+  default_vehicle_id?: string | null;
+  default_vehicle_name?: string | null;
+  default_vehicle_registration?: string | null;
+};
 type Vehicle = {
   id: string;
   display_name: string;
@@ -96,6 +107,15 @@ type Vehicle = {
   max_passengers?: number;
   max_luggage?: number;
   operational_status?: string;
+};
+type FleetCategoryOption = {
+  id: string;
+  display_name?: string;
+  name?: string;
+  max_passengers?: number;
+  max_luggage?: number;
+  passenger_capacity?: number;
+  luggage_capacity?: number;
 };
 
 type GuestTrackerState = {
@@ -199,6 +219,116 @@ export default function AdminBookingsPage() {
   const [dispatchPreviewBooking, setDispatchPreviewBooking] = useState<Booking | null>(null);
   const [dispatchCopied, setDispatchCopied] = useState(false);
   const [now, setNow] = useState(0);
+  const [showQuickAddDriver, setShowQuickAddDriver] = useState(false);
+  const [fleetCategories, setFleetCategories] = useState<FleetCategoryOption[]>([]);
+  const [quickDriverName, setQuickDriverName] = useState('');
+  const [quickDriverPhone, setQuickDriverPhone] = useState('');
+  const [quickDriverLicense, setQuickDriverLicense] = useState('');
+  const [quickDriverNotes, setQuickDriverNotes] = useState('');
+  const [quickVehicleMode, setQuickVehicleMode] = useState<'existing' | 'new' | 'none'>('new');
+  const [quickExistingVehicleId, setQuickExistingVehicleId] = useState('');
+  const [quickNewVehicleName, setQuickNewVehicleName] = useState('');
+  const [quickNewVehicleCategoryId, setQuickNewVehicleCategoryId] = useState('');
+  const [quickNewVehicleReg, setQuickNewVehicleReg] = useState('');
+  const [quickNewVehiclePax, setQuickNewVehiclePax] = useState(4);
+  const [quickNewVehicleLuggage, setQuickNewVehicleLuggage] = useState(4);
+  const [savingQuickDriver, setSavingQuickDriver] = useState(false);
+
+  const loadFleetCategories = useCallback(async () => {
+    try {
+      const response = await fetch('/api/admin/fleet', { cache: 'no-store' });
+      const result = (await response.json()) as {
+        success?: boolean;
+        data?: { categories?: FleetCategoryOption[] };
+      };
+      if (response.ok && result.success && result.data?.categories) {
+        setFleetCategories(result.data.categories);
+        if (result.data.categories.length > 0) {
+          setQuickNewVehicleCategoryId((curr) => curr || result.data!.categories![0].id);
+        }
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }, []);
+
+  async function submitQuickDriver(bookingId: string) {
+    if (!quickDriverName.trim() || !quickDriverPhone.trim()) {
+      setError('Driver Full Name and Phone / WhatsApp Number are required.');
+      return;
+    }
+    if (quickVehicleMode === 'new' && (!quickNewVehicleName.trim() || !quickNewVehicleCategoryId)) {
+      setError('Please enter the Vehicle Display Name and select a Category.');
+      return;
+    }
+
+    setSavingQuickDriver(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/admin/fleet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_driver',
+          driver_id: null,
+          full_name: quickDriverName.trim(),
+          phone: quickDriverPhone.trim(),
+          license_number: quickDriverLicense.trim() || null,
+          driver_notes: quickDriverNotes.trim() || null,
+          account_status: 'active',
+          default_vehicle_id:
+            quickVehicleMode === 'existing' ? quickExistingVehicleId || null : null,
+          new_vehicle_name:
+            quickVehicleMode === 'new' ? quickNewVehicleName.trim() : null,
+          new_vehicle_category_id:
+            quickVehicleMode === 'new' ? quickNewVehicleCategoryId : null,
+          new_vehicle_registration:
+            quickVehicleMode === 'new' ? quickNewVehicleReg.trim() || null : null,
+          new_vehicle_passengers:
+            quickVehicleMode === 'new' ? Number(quickNewVehiclePax) || 4 : null,
+          new_vehicle_luggage:
+            quickVehicleMode === 'new' ? Number(quickNewVehicleLuggage) || 4 : null,
+        }),
+      });
+      const result = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: { driver_id?: string; vehicle_id?: string | null };
+      };
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Could not save driver.');
+      }
+
+      const createdDriverId = result.data?.driver_id ?? '';
+      const createdVehicleId =
+        result.data?.vehicle_id ??
+        (quickVehicleMode === 'existing' ? quickExistingVehicleId : '');
+
+      await loadBookings();
+
+      setAssignments((prev) => ({
+        ...prev,
+        [bookingId]: {
+          driver: createdDriverId || prev[bookingId]?.driver || '',
+          vehicle: createdVehicleId || prev[bookingId]?.vehicle || '',
+        },
+      }));
+
+      setShowQuickAddDriver(false);
+      setQuickDriverName('');
+      setQuickDriverPhone('');
+      setQuickDriverLicense('');
+      setQuickDriverNotes('');
+      setQuickNewVehicleName('');
+      setQuickNewVehicleReg('');
+      setNotice('New driver (and vehicle) added to Fleet and pre-selected for dispatch.');
+    } catch (quickErr) {
+      setError(quickErr instanceof Error ? quickErr.message : 'Driver could not be created.');
+    } finally {
+      setSavingQuickDriver(false);
+    }
+  }
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
@@ -1520,13 +1650,251 @@ export default function AdminBookingsPage() {
                     return (
                       <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                            <Car className="h-4 w-4 text-emerald-600" /> Driver &amp; Vehicle Fleet Dispatch
-                          </h3>
-                          <span className="text-xs text-slate-500">
-                            {drivers.length} Active Driver(s) · {vehicles.length} Active Vehicle(s)
-                          </span>
+                          <div>
+                            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                              <Car className="h-4 w-4 text-emerald-600" /> Driver &amp; Vehicle Fleet Dispatch
+                            </h3>
+                            <span className="text-xs text-slate-500">
+                              {drivers.length} Active Driver(s) · {vehicles.length} Active Vehicle(s)
+                            </span>
+                          </div>
+                          {canOperate && (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextOpen = !showQuickAddDriver;
+                                  setShowQuickAddDriver(nextOpen);
+                                  if (nextOpen && fleetCategories.length === 0) {
+                                    void loadFleetCategories();
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition shadow-sm"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                                {showQuickAddDriver ? 'Close Quick Add' : '+ Quick Add Driver & Vehicle'}
+                              </button>
+                              <a
+                                href="/admin/fleet"
+                                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+                              >
+                                Manage Full Fleet
+                              </a>
+                            </div>
+                          )}
                         </div>
+
+                        {canOperate && showQuickAddDriver && (
+                          <div className="rounded-2xl border border-emerald-200 bg-white p-4 space-y-4 shadow-sm">
+                            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                              <div>
+                                <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                                  <Plus className="h-3.5 w-3.5 text-emerald-600" /> Quick Register Internal Driver &amp; Vehicle
+                                </h4>
+                                <p className="text-[11px] text-slate-500">
+                                  Creates an internal driver record (no login password needed) and pre-selects them for this booking.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowQuickAddDriver(false)}
+                                className="text-slate-400 hover:text-slate-700"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                              <label className="block text-xs font-bold text-slate-700">
+                                Driver Full Name <span className="text-rose-600">*</span>
+                                <input
+                                  type="text"
+                                  value={quickDriverName}
+                                  onChange={(e) => setQuickDriverName(e.target.value)}
+                                  placeholder="e.g. Kamal Perera"
+                                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-900"
+                                />
+                              </label>
+                              <label className="block text-xs font-bold text-slate-700">
+                                Phone / WhatsApp <span className="text-rose-600">*</span>
+                                <input
+                                  type="text"
+                                  value={quickDriverPhone}
+                                  onChange={(e) => setQuickDriverPhone(e.target.value)}
+                                  placeholder="e.g. +94 77 123 4567"
+                                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-900"
+                                />
+                              </label>
+                              <label className="block text-xs font-bold text-slate-700">
+                                License No / Tier
+                                <input
+                                  type="text"
+                                  value={quickDriverLicense}
+                                  onChange={(e) => setQuickDriverLicense(e.target.value)}
+                                  placeholder="Optional (e.g. B1234567)"
+                                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-900"
+                                />
+                              </label>
+                              <label className="block text-xs font-bold text-slate-700">
+                                Languages / Notes
+                                <input
+                                  type="text"
+                                  value={quickDriverNotes}
+                                  onChange={(e) => setQuickDriverNotes(e.target.value)}
+                                  placeholder="Optional (e.g. English, Sinhala)"
+                                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-900"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="space-y-3 rounded-xl bg-slate-50 p-3 border border-slate-200/80">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-slate-800">Assigned / Default Vehicle</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuickVehicleMode('new')}
+                                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                                      quickVehicleMode === 'new'
+                                        ? 'bg-emerald-700 text-white'
+                                        : 'bg-white text-slate-600 border border-slate-200'
+                                    }`}
+                                  >
+                                    + Create New Vehicle
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuickVehicleMode('existing')}
+                                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                                      quickVehicleMode === 'existing'
+                                        ? 'bg-emerald-700 text-white'
+                                        : 'bg-white text-slate-600 border border-slate-200'
+                                    }`}
+                                  >
+                                    Link Existing Vehicle
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuickVehicleMode('none')}
+                                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                                      quickVehicleMode === 'none'
+                                        ? 'bg-slate-800 text-white'
+                                        : 'bg-white text-slate-600 border border-slate-200'
+                                    }`}
+                                  >
+                                    Driver Only
+                                  </button>
+                                </div>
+                              </div>
+
+                              {quickVehicleMode === 'existing' && (
+                                <label className="block text-xs font-bold text-slate-700">
+                                  Choose Existing Fleet Vehicle
+                                  <select
+                                    value={quickExistingVehicleId}
+                                    onChange={(e) => setQuickExistingVehicleId(e.target.value)}
+                                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900"
+                                  >
+                                    <option value="">Select a vehicle</option>
+                                    {vehicles.map((v) => (
+                                      <option key={v.id} value={v.id}>
+                                        {v.display_name} {v.registration_number ? `(${v.registration_number})` : ''} · {v.category_name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              )}
+
+                              {quickVehicleMode === 'new' && (
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                  <label className="block text-xs font-bold text-slate-700 lg:col-span-2">
+                                    Vehicle Display Name / Model <span className="text-rose-600">*</span>
+                                    <input
+                                      type="text"
+                                      value={quickNewVehicleName}
+                                      onChange={(e) => setQuickNewVehicleName(e.target.value)}
+                                      placeholder="e.g. Toyota KDH High Roof"
+                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900"
+                                    />
+                                  </label>
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    Category <span className="text-rose-600">*</span>
+                                    <select
+                                      value={quickNewVehicleCategoryId}
+                                      onChange={(e) => {
+                                        const catId = e.target.value;
+                                        setQuickNewVehicleCategoryId(catId);
+                                        const found = fleetCategories.find((c) => c.id === catId);
+                                        const pax = found?.max_passengers ?? found?.passenger_capacity;
+                                        const lug = found?.max_luggage ?? found?.luggage_capacity;
+                                        if (pax) setQuickNewVehiclePax(pax);
+                                        if (lug !== undefined) setQuickNewVehicleLuggage(lug);
+                                      }}
+                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900"
+                                    >
+                                      <option value="">Select Category</option>
+                                      {fleetCategories.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                          {c.display_name || c.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="block text-xs font-bold text-slate-700">
+                                    Reg Number
+                                    <input
+                                      type="text"
+                                      value={quickNewVehicleReg}
+                                      onChange={(e) => setQuickNewVehicleReg(e.target.value)}
+                                      placeholder="e.g. WP CAA-1234"
+                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900"
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="block text-xs font-bold text-slate-700">
+                                      Max Pax
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={quickNewVehiclePax}
+                                        onChange={(e) => setQuickNewVehiclePax(Number(e.target.value))}
+                                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-medium text-slate-900"
+                                      />
+                                    </label>
+                                    <label className="block text-xs font-bold text-slate-700">
+                                      Luggage
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={quickNewVehicleLuggage}
+                                        onChange={(e) => setQuickNewVehicleLuggage(Number(e.target.value))}
+                                        className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-medium text-slate-900"
+                                      />
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowQuickAddDriver(false)}
+                                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                disabled={savingQuickDriver}
+                                onClick={() => void submitQuickDriver(selectedBooking.id)}
+                                className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50 shadow-sm"
+                              >
+                                {savingQuickDriver ? 'Saving Driver & Vehicle…' : 'Save & Pre-Select for Dispatch'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {selectedBooking.assignment ? (
                           <div className="space-y-4">
@@ -1671,21 +2039,29 @@ export default function AdminBookingsPage() {
                                   Select Available Driver
                                   <select
                                     value={assignments[selectedBooking.id]?.driver ?? ''}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                      const chosenDriverId = e.target.value;
+                                      const chosenDriver = drivers.find((d) => d.id === chosenDriverId);
+                                      const currentVehicle = assignments[selectedBooking.id]?.vehicle ?? '';
                                       setAssignments({
                                         ...assignments,
                                         [selectedBooking.id]: {
-                                          ...(assignments[selectedBooking.id] ?? { driver: '', vehicle: '' }),
-                                          driver: e.target.value,
+                                          driver: chosenDriverId,
+                                          vehicle:
+                                            chosenDriver?.default_vehicle_id &&
+                                            vehicles.some((v) => v.id === chosenDriver.default_vehicle_id)
+                                              ? chosenDriver.default_vehicle_id
+                                              : currentVehicle,
                                         },
-                                      })
-                                    }
+                                      });
+                                    }}
                                     className="mt-1 block w-full rounded-xl border border-slate-300 p-2.5 text-sm font-medium text-slate-900"
                                   >
                                     <option value="">Choose Driver</option>
                                     {drivers.map((d) => (
                                       <option key={d.id} value={d.id}>
                                         {d.full_name} {d.phone ? `· ${d.phone}` : ''}{' '}
+                                        {d.default_vehicle_name ? `[${d.default_vehicle_name}] ` : ''}
                                         {busyDriverIds.has(d.id) ? '(On another active trip)' : '(Available)'}
                                       </option>
                                     ))}

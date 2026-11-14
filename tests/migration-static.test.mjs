@@ -20,6 +20,7 @@ const files = [
   '202611140015_application_roles_cutover.sql',
   '202611140016_admin_operations_lifecycle.sql',
   '202611140017_record_booking_payment_receipt.sql',
+  '202611140018_internal_driver_fleet_management.sql',
 ];
 const sql = Object.fromEntries(files.map((f) => [f, readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')]));
 const all = Object.values(sql).join('\n');
