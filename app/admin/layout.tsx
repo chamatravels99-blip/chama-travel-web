@@ -17,7 +17,7 @@ export default async function AdminLayout({
     }
     throw error;
   }
-  if (!context.roles.some((role) => ['admin', 'super_admin', 'operator'].includes(role))) {
+  if (!context.roles.some((role) => ['admin', 'super_admin'].includes(role))) {
     redirect('/login?error=unauthorized');
   }
 

@@ -8,12 +8,9 @@ import { Compass, Mail, Lock, ArrowRight } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 function getRoleLanding(roles: string[]) {
-  if (roles.some((role) => ['super_admin', 'admin', 'operator'].includes(role))) {
-    return '/admin/dashboard';
-  }
-  if (roles.includes('driver')) return '/driver/dashboard';
-  if (roles.includes('customer')) return '/customer/dashboard';
-  return null;
+  return roles.some((role) => ['super_admin', 'admin'].includes(role))
+    ? '/admin/dashboard'
+    : null;
 }
 
 function getAuthorizedRedirectTo(redirectTo: string | null, roles: string[]) {
@@ -24,12 +21,7 @@ function getAuthorizedRedirectTo(redirectTo: string | null, roles: string[]) {
     if (target.origin !== window.location.origin) return null;
 
     const isAdminRoute = target.pathname === '/admin' || target.pathname.startsWith('/admin/');
-    const isDriverRoute = target.pathname === '/driver' || target.pathname.startsWith('/driver/');
-    const isCustomerRoute = target.pathname === '/customer' || target.pathname.startsWith('/customer/');
-    const allowed =
-      (isAdminRoute && roles.some((role) => ['admin', 'super_admin', 'operator'].includes(role))) ||
-      (isDriverRoute && roles.some((role) => ['driver', 'admin', 'super_admin'].includes(role))) ||
-      (isCustomerRoute && roles.includes('customer'));
+    const allowed = isAdminRoute && roles.some((role) => ['admin', 'super_admin'].includes(role));
 
     return allowed ? `${target.pathname}${target.search}${target.hash}` : null;
   } catch {
@@ -191,18 +183,6 @@ export default function LoginPage() {
           </button>
 
         </form>
-
-        <div className="text-center pt-2 border-t border-slate-100 space-y-1">
-          <p className="text-[11px] text-slate-400">
-            Don&apos;t have an account?{' '}
-            <Link
-              href="/register"
-              className="text-blue-600 font-bold hover:underline"
-            >
-              Create Account
-            </Link>
-          </p>
-        </div>
 
       </div>
     </div>

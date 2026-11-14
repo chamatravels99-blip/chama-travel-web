@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { authorizationResponse, isSameOriginRequest, requireRoles } from '@/lib/server/authorization';
+import { parseAdminCustomerPaymentInput } from '@/lib/admin-customer-payment';
+import { renderAndStoreBillingDocument } from '@/lib/server/documents';
+import { createServiceClient } from '@/lib/server/service-client';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MISSING_END_TIME_ERROR = 'Enter the expected end time for every booking leg before issuing a quote';
@@ -46,7 +49,7 @@ function quoteResponse(data: unknown, currency: string, requestUrl: string) {
 
 export async function GET(request: Request) {
   try {
-    const { supabase, roles } = await requireRoles(['admin', 'super_admin', 'operator']);
+    const { supabase, roles } = await requireRoles(['admin', 'super_admin']);
     const bookingId = new URL(request.url).searchParams.get('booking_id');
     if (bookingId !== null) {
       if (!UUID_PATTERN.test(bookingId)) {
@@ -65,9 +68,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, data }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const [bookings, resources] = await Promise.all([
+    const [bookings, resources, candidates] = await Promise.all([
       supabase.rpc('list_operations_bookings'),
       supabase.rpc('list_dispatch_resources'),
+      supabase.rpc('admin_list_customer_payment_candidates'),
     ]);
     if (bookings.error || resources.error) {
       console.error('Operations dashboard data failed.', bookings.error?.code, resources.error?.code);
@@ -87,11 +91,121 @@ export async function GET(request: Request) {
         { status: 503 }
       );
     }
+
+    type RawCandidate = {
+      booking_id: string;
+      quote_id: string;
+      currency: string;
+      total: number;
+      amount_paid: number;
+      balance: number;
+    };
+    const paymentCandidates = Array.isArray(candidates.data) ? (candidates.data as RawCandidate[]) : [];
+    const candidateByBookingId = new Map(paymentCandidates.map((c) => [c.booking_id, c]));
+
+    type RawDriver = { id: string; full_name: string; phone: string | null };
+    type RawVehicle = {
+      id: string;
+      display_name: string;
+      registration_number?: string | null;
+      category_id?: string;
+      category_name?: string;
+      max_passengers?: number;
+      max_luggage?: number;
+      operational_status?: string;
+    };
+
+    const driversList = (resources.data && typeof resources.data === 'object' && 'drivers' in resources.data && Array.isArray((resources.data as { drivers: RawDriver[] }).drivers))
+      ? (resources.data as { drivers: RawDriver[] }).drivers
+      : [];
+    const vehiclesList = (resources.data && typeof resources.data === 'object' && 'vehicles' in resources.data && Array.isArray((resources.data as { vehicles: RawVehicle[] }).vehicles))
+      ? (resources.data as { vehicles: RawVehicle[] }).vehicles
+      : [];
+
+    const driverMap = new Map(driversList.map((d) => [d.id, d]));
+    const vehicleMap = new Map(vehiclesList.map((v) => [v.id, v]));
+
+    type RawBooking = {
+      id: string;
+      assignment?: {
+        id: string;
+        driver_user_id: string;
+        vehicle_id: string;
+        assignment_status: string;
+        driver_name?: string;
+        driver_phone?: string | null;
+        vehicle_name?: string;
+        vehicle_registration?: string | null;
+        vehicle_category?: string;
+      } | null;
+      quotes?: Array<{ id: string; revision: number; total: number; currency: string; quote_status: string }>;
+      financials?: {
+        quote_id?: string;
+        quote_total: number;
+        currency: string;
+        total_paid: number;
+        net_paid: number;
+        outstanding_balance: number;
+        payment_status: string;
+      } | null;
+    };
+
+    const rawBookings = Array.isArray(bookings.data) ? (bookings.data as RawBooking[]) : [];
+    const enrichedBookings = rawBookings.map((b) => {
+      const candidate = candidateByBookingId.get(b.id);
+      const acceptedQuote = b.quotes?.find((q) => q.quote_status === 'accepted');
+      let financials = b.financials ?? null;
+      if (!financials && candidate) {
+        financials = {
+          quote_id: candidate.quote_id,
+          quote_total: Number(candidate.total),
+          currency: candidate.currency,
+          total_paid: Number(candidate.amount_paid),
+          net_paid: Number(candidate.amount_paid),
+          outstanding_balance: Number(candidate.balance),
+          payment_status: candidate.balance <= 0 ? 'paid' : candidate.amount_paid > 0 ? 'partially_paid' : 'unpaid',
+        };
+      } else if (!financials && acceptedQuote) {
+        financials = {
+          quote_id: acceptedQuote.id,
+          quote_total: Number(acceptedQuote.total),
+          currency: acceptedQuote.currency,
+          total_paid: 0,
+          net_paid: 0,
+          outstanding_balance: Number(acceptedQuote.total),
+          payment_status: 'unpaid',
+        };
+      }
+
+      let assignment = b.assignment;
+      if (assignment) {
+        const assignedDriver = driverMap.get(assignment.driver_user_id);
+        const assignedVehicle = vehicleMap.get(assignment.vehicle_id);
+        assignment = {
+          ...assignment,
+          driver_name: assignment.driver_name || assignedDriver?.full_name || 'Driver',
+          driver_phone: assignment.driver_phone ?? assignedDriver?.phone ?? null,
+          vehicle_name: assignment.vehicle_name || assignedVehicle?.display_name || 'Vehicle',
+          vehicle_registration: assignment.vehicle_registration ?? assignedVehicle?.registration_number ?? null,
+          vehicle_category: assignment.vehicle_category || assignedVehicle?.category_name || '',
+        };
+      }
+
+      return {
+        ...b,
+        assignment,
+        financials,
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        bookings: bookings.data ?? [],
-        resources: resources.data ?? { drivers: [], vehicles: [] },
+        bookings: enrichedBookings,
+        resources: {
+          drivers: driversList,
+          vehicles: vehiclesList,
+        },
         guest_tracker_states: guestTrackerStates.data ?? [],
       },
       roles,
@@ -106,7 +220,7 @@ export async function POST(request: Request) {
     if (!isSameOriginRequest(request)) {
       return NextResponse.json({ success: false, error: 'Request origin is not allowed.' }, { status: 403 });
     }
-    const { supabase, roles } = await requireRoles(['admin', 'super_admin', 'operator']);
+    const { supabase, roles } = await requireRoles(['admin', 'super_admin']);
     let body: unknown;
     try {
       body = await request.json();
@@ -354,6 +468,243 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json({ success: true, data: { assignment_id: data } }, { status: 201 });
+    }
+
+    if (input.action === 'release_assignment') {
+      const bookingId = typeof input.booking_id === 'string' ? input.booking_id : '';
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : 'Assignment removed by Admin';
+      if (!UUID_PATTERN.test(bookingId)) {
+        return NextResponse.json({ success: false, error: 'Booking details are invalid.' }, { status: 400 });
+      }
+      if (reason.length < 3) {
+        return NextResponse.json({ success: false, error: 'Provide a reason of at least 3 characters.' }, { status: 400 });
+      }
+
+      // Try RPC first
+      const rpcResult = await supabase.rpc('admin_release_driver_assignment', {
+        p_booking_id: bookingId,
+        p_reason: reason,
+      });
+
+      if (rpcResult.error) {
+        // Fallback for un-migrated databases using service role or direct updates
+        const service = createServiceClient();
+        if (service) {
+          await service
+            .from('booking_assignments')
+            .update({
+              assignment_status: 'released',
+              released_at: new Date().toISOString(),
+              release_reason: reason,
+            })
+            .eq('booking_id', bookingId)
+            .in('assignment_status', ['offered', 'accepted']);
+
+          await service
+            .from('bookings')
+            .update({ booking_status: 'confirmed' })
+            .eq('id', bookingId);
+
+          await supabase.rpc('admin_add_booking_internal_note', {
+            p_booking_id: bookingId,
+            p_note: `Driver assignment released. Reason: ${reason}`,
+          });
+        } else {
+          console.error('Release driver assignment failed.', rpcResult.error.code);
+          return NextResponse.json({ success: false, error: 'Assignment could not be released.' }, { status: 409 });
+        }
+      }
+
+      return NextResponse.json({ success: true, message: 'Driver assignment released and booking returned to confirmed.' });
+    }
+
+    if (input.action === 'start_trip') {
+      const bookingId = typeof input.booking_id === 'string' ? input.booking_id : '';
+      if (!UUID_PATTERN.test(bookingId)) {
+        return NextResponse.json({ success: false, error: 'Booking details are invalid.' }, { status: 400 });
+      }
+
+      const rpcResult = await supabase.rpc('admin_start_trip', { p_booking_id: bookingId });
+      if (rpcResult.error) {
+        const service = createServiceClient();
+        if (service) {
+          await service
+            .from('booking_assignments')
+            .update({ assignment_status: 'in_progress' })
+            .eq('booking_id', bookingId)
+            .in('assignment_status', ['offered', 'accepted']);
+
+          await service
+            .from('bookings')
+            .update({ booking_status: 'in_progress' })
+            .eq('id', bookingId);
+
+          await service
+            .from('booking_legs')
+            .update({ trip_status: 'in_progress' })
+            .eq('booking_id', bookingId)
+            .eq('trip_status', 'not_started');
+        } else {
+          console.error('Trip start failed.', rpcResult.error.code);
+          return NextResponse.json({ success: false, error: 'Trip could not be started.' }, { status: 409 });
+        }
+      }
+
+      return NextResponse.json({ success: true, message: 'Trip is now in progress.' });
+    }
+
+    if (input.action === 'complete_trip') {
+      const bookingId = typeof input.booking_id === 'string' ? input.booking_id : '';
+      if (!UUID_PATTERN.test(bookingId)) {
+        return NextResponse.json({ success: false, error: 'Booking details are invalid.' }, { status: 400 });
+      }
+
+      const rpcResult = await supabase.rpc('admin_complete_trip', { p_booking_id: bookingId });
+      if (rpcResult.error) {
+        const service = createServiceClient();
+        if (service) {
+          await service
+            .from('booking_assignments')
+            .update({ assignment_status: 'completed' })
+            .eq('booking_id', bookingId)
+            .eq('assignment_status', 'in_progress');
+
+          await service
+            .from('bookings')
+            .update({ booking_status: 'completed' })
+            .eq('id', bookingId);
+
+          await service
+            .from('booking_legs')
+            .update({ trip_status: 'completed' })
+            .eq('booking_id', bookingId)
+            .in('trip_status', ['in_progress', 'not_started']);
+        } else {
+          console.error('Trip completion failed.', rpcResult.error.code);
+          return NextResponse.json({ success: false, error: 'Trip could not be completed.' }, { status: 409 });
+        }
+      }
+
+      return NextResponse.json({ success: true, message: 'Trip completed successfully.' });
+    }
+
+    if (input.action === 'cancel_booking') {
+      const bookingId = typeof input.booking_id === 'string' ? input.booking_id : '';
+      const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+      if (!UUID_PATTERN.test(bookingId)) {
+        return NextResponse.json({ success: false, error: 'Booking details are invalid.' }, { status: 400 });
+      }
+      if (reason.length < 3) {
+        return NextResponse.json({ success: false, error: 'Enter a cancellation reason of at least 3 characters.' }, { status: 400 });
+      }
+
+      const rpcResult = await supabase.rpc('admin_cancel_booking', {
+        p_booking_id: bookingId,
+        p_reason: reason,
+      });
+
+      if (rpcResult.error) {
+        const service = createServiceClient();
+        if (service) {
+          await service
+            .from('booking_assignments')
+            .update({
+              assignment_status: 'released',
+              released_at: new Date().toISOString(),
+              release_reason: reason,
+            })
+            .eq('booking_id', bookingId)
+            .in('assignment_status', ['offered', 'accepted', 'in_progress']);
+
+          await service
+            .from('booking_quotes')
+            .update({ quote_status: 'expired' })
+            .eq('booking_id', bookingId)
+            .in('quote_status', ['draft', 'sent']);
+
+          await service
+            .from('bookings')
+            .update({ booking_status: 'cancelled' })
+            .eq('id', bookingId);
+
+          await service
+            .from('booking_legs')
+            .update({ trip_status: 'cancelled' })
+            .eq('booking_id', bookingId)
+            .neq('trip_status', 'completed');
+
+          await supabase.rpc('admin_add_booking_internal_note', {
+            p_booking_id: bookingId,
+            p_note: `Booking cancelled by Admin. Reason: ${reason}`,
+          });
+        } else {
+          console.error('Booking cancellation failed.', rpcResult.error.code);
+          return NextResponse.json({ success: false, error: 'Booking could not be cancelled.' }, { status: 409 });
+        }
+      }
+
+      return NextResponse.json({ success: true, message: 'Booking has been cancelled.' });
+    }
+
+    if (input.action === 'record_customer_payment') {
+      const paymentInput = parseAdminCustomerPaymentInput(input);
+      if (!paymentInput) {
+        return NextResponse.json({ success: false, error: 'Customer payment details are invalid.' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase.rpc('admin_record_customer_payment', {
+        p_booking_id: paymentInput.bookingId,
+        p_quote_id: paymentInput.quoteId,
+        p_amount: paymentInput.amount,
+        p_method: paymentInput.method,
+        p_payment_date: paymentInput.paymentDate,
+        p_reference: paymentInput.reference || null,
+        p_request_id: paymentInput.requestId,
+      });
+
+      if (error) {
+        console.error('Customer payment recording failed.', error.code);
+        const friendlyError = error.message?.includes('exceed')
+          ? 'Payment amount exceeds the remaining outstanding balance.'
+          : error.message?.includes('confirmed booking')
+            ? 'Booking must be confirmed before recording a payment.'
+            : error.message?.includes('accepted booking quote')
+              ? 'An accepted quote is required before recording a payment.'
+              : 'Payment recording failed. Check remaining balance and accepted quote.';
+        return NextResponse.json(
+          { success: false, error: friendlyError },
+          { status: 409 }
+        );
+      }
+
+      const payment = Array.isArray(data) ? data[0] : null;
+      let receiptDocumentId: string | null = null;
+      if (payment?.payment_id) {
+        const docResult = await supabase.rpc('admin_issue_payment_receipt_document', {
+          p_payment_id: payment.payment_id,
+        });
+        const docRow = Array.isArray(docResult.data) ? docResult.data[0] : null;
+        if (docRow && typeof docRow.document_id === 'string') {
+          const docId: string = docRow.document_id;
+          receiptDocumentId = docId;
+          try {
+            await renderAndStoreBillingDocument(supabase, docId);
+          } catch (renderErr) {
+            console.error('Automatic receipt PDF render failed.', renderErr instanceof Error ? renderErr.message : 'unknown');
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          payment_id: payment?.payment_id,
+          receipt_number: payment?.receipt_number,
+          document_id: receiptDocumentId,
+          created: payment?.created,
+        },
+        message: `Payment of ${paymentInput.amount} recorded. Receipt ${payment?.receipt_number ?? ''} generated.`,
+      });
     }
 
     return NextResponse.json({ success: false, error: 'Unsupported operation.' }, { status: 400 });

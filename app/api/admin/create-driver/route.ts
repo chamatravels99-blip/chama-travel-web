@@ -29,12 +29,11 @@ export async function POST(request: Request) {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const fullName = typeof body.full_name === 'string' ? body.full_name.trim() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
-    const password = typeof body.password === 'string' ? body.password : '';
 
     if (!EMAIL_PATTERN.test(email) || fullName.length < 2 || fullName.length > 120 ||
-        (phone && !PHONE_PATTERN.test(phone)) || password.length < 12 || password.length > 128) {
+        (phone && !PHONE_PATTERN.test(phone))) {
       return NextResponse.json(
-        { success: false, error: 'Provide a valid email, name, optional phone, and a password of at least 12 characters.' },
+        { success: false, error: 'Provide a valid email, name, and optional phone.' },
         { status: 400 }
       );
     }
@@ -42,8 +41,8 @@ export async function POST(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('Driver provisioning is unavailable because server credentials are not configured.');
-      return NextResponse.json({ success: false, error: 'Driver provisioning is not configured.' }, { status: 503 });
+      console.error('Driver record provisioning is unavailable because server credentials are not configured.');
+      return NextResponse.json({ success: false, error: 'Driver record provisioning is not configured.' }, { status: 503 });
     }
 
     const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
@@ -51,14 +50,14 @@ export async function POST(request: Request) {
     });
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
-      password,
+      password: `${crypto.randomUUID()}${crypto.randomUUID()}`,
       email_confirm: true,
       user_metadata: { full_name: fullName, phone: phone || null },
     });
     if (createError || !created.user) {
-      console.error('Driver Auth account creation failed.', createError?.code);
+      console.error('Driver record identity creation failed.', createError?.code);
       return NextResponse.json(
-        { success: false, error: 'The driver account could not be created. Check that the email is not already registered.' },
+        { success: false, error: 'The driver record could not be created. Check that the email is not already registered.' },
         { status: 400 }
       );
     }
@@ -68,22 +67,22 @@ export async function POST(request: Request) {
       p_actor_user_id: user.id,
     });
     if (roleError) {
-      console.error('Driver role provisioning failed.', roleError.code);
+      console.error('Driver record provisioning failed.', roleError.code);
       const { error: deactivateError } = await adminClient.rpc('admin_deactivate_profile', {
         p_user_id: created.user.id,
         p_actor_user_id: user.id,
       });
       if (deactivateError) {
         await adminClient.auth.admin.updateUserById(created.user.id, { ban_duration: '876000h' });
-        console.error('Incomplete driver account could not be deactivated.', deactivateError.code);
+        console.error('Incomplete driver record could not be deactivated.', deactivateError.code);
       }
       return NextResponse.json(
-        { success: false, error: 'The account was created but could not be provisioned as a driver. It has been disabled; contact support before retrying.' },
+        { success: false, error: 'The record was created but could not be provisioned. It has been disabled; contact support before retrying.' },
         { status: 503 }
       );
     }
 
-    return NextResponse.json({ success: true, message: 'Driver account created.' }, { status: 201 });
+    return NextResponse.json({ success: true, message: 'Driver record created. Drivers do not need an account password.' }, { status: 201 });
   } catch (error) {
     return authorizationResponse(error);
   }

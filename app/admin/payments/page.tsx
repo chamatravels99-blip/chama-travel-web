@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
@@ -32,6 +32,22 @@ type Payment = {
   receipt_number: string | null;
   payment_date: string | null;
   verified_at: string;
+};
+type BillingDocument = {
+  document_type: 'invoice' | 'receipt';
+  record_id: string;
+  record_number: string;
+  booking_id: string;
+  booking_ref: string;
+  customer_name: string;
+  customer_email: string | null;
+  currency: string;
+  amount: number;
+  status: string;
+  recorded_at: string;
+  document_id: string | null;
+  file_status: 'pending' | 'stored' | null;
+  payment_id: string | null;
 };
 type Settlement = {
   id: string;
@@ -142,12 +158,36 @@ const EMPTY_DRIVER_HIRE_PAYOUT: DriverHirePayoutInput = {
   request_id: '',
 };
 
+async function fetchBillingDocuments(search: string, type: string, offset: number) {
+  const params = new URLSearchParams({ offset: String(offset) });
+  if (search) params.set('search', search);
+  if (type) params.set('type', type);
+  const response = await fetch(`/api/admin/billing/documents?${params}`, { cache: 'no-store' });
+  const result = await response.json() as {
+    success?: boolean;
+    error?: string;
+    data?: BillingDocument[];
+    has_more?: boolean;
+  };
+  if (!response.ok || !result.success || !Array.isArray(result.data)) {
+    throw new Error(result.error || 'Billing document history could not be loaded.');
+  }
+  return { documents: result.data, hasMore: result.has_more === true };
+}
+
 function PaymentsPageContent() {
   const searchParams = useSearchParams();
   const bookingFilter = searchParams.get('booking_id') ?? '';
   const bookingRefFilter = searchParams.get('booking_ref') ?? '';
   const [claims, setClaims] = useState<Claim[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [billingDocuments, setBillingDocuments] = useState<BillingDocument[]>([]);
+  const [billingSearchInput, setBillingSearchInput] = useState('');
+  const [billingTypeInput, setBillingTypeInput] = useState('');
+  const [billingSearch, setBillingSearch] = useState('');
+  const [billingType, setBillingType] = useState('');
+  const [billingHasMore, setBillingHasMore] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [customerPaymentCandidates, setCustomerPaymentCandidates] = useState<CustomerPaymentCandidate[]>([]);
   const [driverHireFinance, setDriverHireFinance] = useState<DriverHireFinance>({
@@ -170,7 +210,10 @@ function PaymentsPageContent() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch('/api/admin/payments', { cache: 'no-store' });
+      const [response, documentResult] = await Promise.all([
+        fetch('/api/admin/payments', { cache: 'no-store' }),
+        fetchBillingDocuments(billingSearch, billingType, 0),
+      ]);
       const result = await response.json() as {
         success?: boolean;
         error?: string;
@@ -188,13 +231,15 @@ function PaymentsPageContent() {
       setSettlements(result.data.settlements);
       setCustomerPaymentCandidates(result.data.customer_payment_candidates);
       setDriverHireFinance(result.data.driver_hire);
+      setBillingDocuments(documentResult.documents);
+      setBillingHasMore(documentResult.hasMore);
       setError('');
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Finance data could not be loaded.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [billingSearch, billingType]);
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
@@ -207,6 +252,65 @@ function PaymentsPageContent() {
   const visiblePayments = bookingFilter
     ? payments.filter((payment) => payment.booking_id === bookingFilter)
     : payments;
+
+  async function searchBillingDocuments(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const search = billingSearchInput.trim();
+    const type = billingTypeInput;
+    setBillingLoading(true);
+    setNotice('');
+    try {
+      const result = await fetchBillingDocuments(search, type, 0);
+      setBillingSearch(search);
+      setBillingType(type);
+      setBillingDocuments(result.documents);
+      setBillingHasMore(result.hasMore);
+    } catch (searchError) {
+      setNotice(searchError instanceof Error ? searchError.message : 'Billing document history could not be loaded.');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  async function loadMoreBillingDocuments() {
+    setBillingLoading(true);
+    try {
+      const result = await fetchBillingDocuments(billingSearch, billingType, billingDocuments.length);
+      setBillingDocuments((current) => [...current, ...result.documents]);
+      setBillingHasMore(result.hasMore);
+    } catch (searchError) {
+      setNotice(searchError instanceof Error ? searchError.message : 'More billing documents could not be loaded.');
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  async function updateBillingPdf(action: 'issue_receipt' | 'retry_render', document: BillingDocument) {
+    if (action === 'issue_receipt' && !document.payment_id) return;
+    if (action === 'retry_render' && !document.document_id) return;
+    setBusy(document.record_id);
+    setNotice('');
+    try {
+      const response = await fetch('/api/admin/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify(action === 'issue_receipt'
+          ? { action, payment_id: document.payment_id }
+          : { action, document_id: document.document_id }),
+      });
+      const result = await response.json() as { success?: boolean; message?: string; warning?: string; error?: string };
+      if ((!response.ok && response.status !== 202) || result.success !== true) {
+        throw new Error(result.error || 'The billing PDF could not be prepared.');
+      }
+      setNotice(result.warning || result.message || 'Billing document is ready.');
+      await load();
+    } catch (actionError) {
+      setNotice(actionError instanceof Error ? actionError.message : 'The billing PDF could not be prepared.');
+    } finally {
+      setBusy('');
+    }
+  }
 
   async function submit(body: Record<string, unknown>): Promise<{ created?: boolean; data?: Record<string, unknown> }> {
     const response = await fetch('/api/admin/payments', {
@@ -443,6 +547,74 @@ function PaymentsPageContent() {
             )}
           </div>
         )}
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-5">
+            <h2 className="font-extrabold">Invoices &amp; receipts</h2>
+            <p className="mt-1 text-xs text-slate-500">Search the booking-linked billing archive. Issuance and corrections remain in each booking&apos;s Billing &amp; Documents panel.</p>
+            <form onSubmit={(event) => void searchBillingDocuments(event)} className="mt-4 flex flex-wrap gap-2">
+              <input
+                value={billingSearchInput}
+                onChange={(event) => setBillingSearchInput(event.target.value)}
+                maxLength={100}
+                placeholder="Invoice, receipt, booking, or customer"
+                className="min-w-60 flex-1 rounded-xl border border-slate-200 p-2.5 text-sm"
+              />
+              <select
+                value={billingTypeInput}
+                onChange={(event) => setBillingTypeInput(event.target.value)}
+                className="rounded-xl border border-slate-200 p-2.5 text-sm"
+                aria-label="Billing document type"
+              >
+                <option value="">All documents</option>
+                <option value="invoice">Invoices</option>
+                <option value="receipt">Receipts</option>
+              </select>
+              <button type="submit" disabled={billingLoading} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+                Search
+              </button>
+            </form>
+          </div>
+          {billingDocuments.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">{loading || billingLoading ? 'Loading billing documents…' : 'No invoices or receipts match this search.'}</p>
+          ) : billingDocuments.map((document) => (
+            <article key={`${document.document_type}-${document.record_id}`} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900">
+                  {document.document_type === 'invoice' ? 'Invoice' : 'Receipt'} {document.record_number}
+                  <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">{document.status}</span>
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  <b>{document.booking_ref}</b> · {document.customer_name}
+                  {document.customer_email ? ` · ${document.customer_email}` : ''}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {document.currency} {Number(document.amount).toFixed(2)} · {new Date(document.recorded_at).toLocaleDateString('en-GB')}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {document.document_id && document.file_status === 'stored' ? (
+                  <>
+                    <a className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-800" target="_blank" rel="noopener noreferrer" href={`/api/documents/download?id=${document.document_id}&view=1`}>View PDF</a>
+                    <a className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-800" href={`/api/documents/download?id=${document.document_id}`}>Download</a>
+                  </>
+                ) : document.document_id ? (
+                  <button type="button" disabled={busy === document.record_id} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-800 disabled:opacity-50" onClick={() => void updateBillingPdf('retry_render', document)}>Generate PDF</button>
+                ) : document.document_type === 'receipt' ? (
+                  <button type="button" disabled={busy === document.record_id} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-800 disabled:opacity-50" onClick={() => void updateBillingPdf('issue_receipt', document)}>Issue receipt PDF</button>
+                ) : null}
+                <Link className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-bold text-slate-800" href={`/admin/payments?booking_id=${encodeURIComponent(document.booking_id)}&booking_ref=${encodeURIComponent(document.booking_ref)}`}>Payment ledger</Link>
+              </div>
+            </article>
+          ))}
+          {billingHasMore && (
+            <div className="p-4 text-center">
+              <button type="button" disabled={billingLoading} onClick={() => void loadMoreBillingDocuments()} className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-800 disabled:opacity-50">
+                {billingLoading ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 p-5">

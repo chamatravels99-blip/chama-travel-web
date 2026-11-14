@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 
-export type AppRole = 'super_admin' | 'admin' | 'operator' | 'driver' | 'customer';
-const APP_ROLES = new Set<AppRole>(['super_admin', 'admin', 'operator', 'driver', 'customer']);
+export type AppRole = 'super_admin' | 'admin';
+const APP_ROLES = new Set<AppRole>(['super_admin', 'admin']);
 
 export class AuthorizationError extends Error {
   constructor(

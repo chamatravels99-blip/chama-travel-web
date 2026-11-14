@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizationResponse, getAuthenticatedContext } from '@/lib/server/authorization';
+import { authorizationResponse, requireRoles } from '@/lib/server/authorization';
 import { isUuid, streamAuthorizedObject } from '@/lib/server/documents';
 
 export async function GET(request: Request) {
@@ -8,8 +8,8 @@ export async function GET(request: Request) {
     if (!isUuid(id)) {
       return NextResponse.json({ success: false, error: 'Document is unavailable.' }, { status: 404 });
     }
-    const { supabase } = await getAuthenticatedContext();
-    // The database decides access (admin, owning customer, accepted assigned driver); the client-supplied id is never trusted.
+    const { supabase } = await requireRoles(['admin', 'super_admin']);
+    // The database authorizes the document id; the client-supplied id is never trusted.
     const { data, error } = await supabase.rpc('authorize_booking_document', { p_document_id: id });
     const row = Array.isArray(data) ? data[0] : null;
     if (error || !row) {

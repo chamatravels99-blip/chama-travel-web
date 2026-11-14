@@ -42,7 +42,7 @@ type NavigationItem = {
 };
 
 const ADMIN_ROLES: AppRole[] = ['admin', 'super_admin'];
-const OPERATIONS_ROLES: AppRole[] = ['admin', 'super_admin', 'operator'];
+const OPERATIONS_ROLES: AppRole[] = ['admin', 'super_admin'];
 
 const navigation: NavigationItem[] = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: Home, roles: OPERATIONS_ROLES },
@@ -63,9 +63,6 @@ const navigation: NavigationItem[] = [
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
-  operator: 'Operator',
-  driver: 'Driver',
-  customer: 'Customer',
 };
 
 export default function AdminShell({ children, email, displayName, roles }: AdminShellProps) {

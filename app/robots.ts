@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin/', '/customer/', '/driver/', '/login', '/register'],
+      disallow: ['/admin/', '/driver/', '/login'],
     },
     sitemap: 'https://chamatravels.com/sitemap.xml',
   };

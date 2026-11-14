@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import GuestDocuments from '@/components/GuestDocuments';
 
 type Invitation = {
@@ -45,7 +44,7 @@ export default function DriverInvitation() {
       cache: 'no-store',
       body: JSON.stringify(body),
     });
-    const result = await response.json() as { success?: boolean; error?: string; data?: Invitation; redirect?: string };
+    const result = await response.json() as { success?: boolean; error?: string; data?: Invitation };
     if (!response.ok || !result.success) throw new Error(result.error || 'The request could not be completed.');
     return result;
   }, []);
@@ -80,11 +79,7 @@ export default function DriverInvitation() {
     setError('');
     setNotice('');
     try {
-      const result = await call({ ...body, token });
-      if (result.redirect) {
-        window.location.assign(result.redirect);
-        return;
-      }
+      await call({ ...body, token });
       setNotice(success);
       await load(token);
     } catch (runError) {
@@ -156,14 +151,6 @@ export default function DriverInvitation() {
 
             <section className="rounded-3xl border border-slate-200 bg-white p-5">
               <GuestDocuments token={token} audience="driver" />
-            </section>
-
-            <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-blue-200 bg-blue-50 p-5">
-              <p className="text-sm text-blue-950">Have a driver account? Sign in, then link this invitation to move it to your dashboard. Only the invited driver account can link it.</p>
-              <div className="flex gap-3">
-                <Link href="/login" className="rounded-xl border border-blue-300 px-4 py-2.5 text-sm font-bold text-blue-800">Sign in</Link>
-                <button type="button" disabled={busy} onClick={() => void run({ action: 'link' }, 'Linked.')} className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Link to my account</button>
-              </div>
             </section>
           </>
         )}

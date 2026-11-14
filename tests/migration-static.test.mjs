@@ -16,6 +16,10 @@ const files = [
   '202611140011_finite_booking_leg_times.sql',
   '202611140012_secure_booking_submission.sql',
   '202611140013_booking_rpc_cutover.sql',
+  '202611140014_admin_billing_documents_hub.sql',
+  '202611140015_application_roles_cutover.sql',
+  '202611140016_admin_operations_lifecycle.sql',
+  '202611140017_record_booking_payment_receipt.sql',
 ];
 const sql = Object.fromEntries(files.map((f) => [f, readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')]));
 const all = Object.values(sql).join('\n');
@@ -91,6 +95,28 @@ test('booking payment summary is authorized, scoped, uncapped, and currency-awar
   assert.match(migration, /grant execute on function public\.admin_get_booking_payment_summary\(uuid\)\s+to authenticated/i);
 });
 
+test('billing document hub is Admin-only, searchable, and paginated', () => {
+  const migration = sql[files[13]];
+  assert.match(migration, /admin_list_billing_documents\([\s\S]*p_search text[\s\S]*p_document_type text[\s\S]*p_limit integer[\s\S]*p_offset integer/i);
+  assert.match(migration, /private\.has_active_role\([\s\S]*array\['admin', 'super_admin'\]/i);
+  assert.match(migration, /from public\.invoices as i[\s\S]*from public\.payments as p[\s\S]*p\.entry_type = 'receipt'[\s\S]*p\.receipt_number is not null/i);
+  assert.match(migration, /p_limit not between 1 and 101[\s\S]*p_offset not between 0 and 10000/i);
+  assert.match(migration, /strpos\(pg_catalog\.lower\(r\.record_number\), pg_catalog\.lower\(v_search\)\)/i);
+  assert.match(migration, /revoke all on function public\.admin_list_billing_documents\(text, text, integer, integer\)\s+from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.admin_list_billing_documents\(text, text, integer, integer\)\s+to authenticated/i);
+});
+
+test('application role cutover revokes customer/operator access but preserves driver business markers', () => {
+  const migration = sql[files[14]];
+  assert.match(migration, /r\.code in \('operator', 'customer'\)[\s\S]*ur\.revoked_at is null/i);
+  assert.doesNotMatch(migration, /r\.code in \([^)]*'driver'/i);
+  assert.match(migration, /v_requested_staff_role is distinct from 'admin'/i);
+  assert.match(migration, /Only an active Super Admin is required|An active Super Admin is required/i);
+  assert.match(migration, /comment on table public\.user_roles[\s\S]*driver assignments remain an internal dispatch eligibility marker/i);
+  assert.match(migration, /insert into public\.profiles[\s\S]*return new;[\s\S]*end;\s*\$function\$/i);
+  assert.doesNotMatch(migration, /insert into public\.user_roles \(user_id, role_id\)\s*select new\.id/i);
+});
+
 test('financial documents remain customer-scoped and unavailable to drivers', () => {
   const documents = sql[files[1]];
   assert.match(documents, /v_doc\.document_type = 'booking_document'[\s\S]*private\.has_active_role\(p_user_id, array\['driver'\]\)/i);
@@ -117,23 +143,19 @@ test('guest access security preserves revocations and restricts privileged entry
   assert.match(migration, /grant execute on function public\.issue_guest_booking_tracker_token\(uuid, text\),[\s\S]*public\.service_claim_driver_invitation\(text, uuid\)\s+to service_role/);
 });
 
-test('guest issuance and account-link routes enforce limits before service RPCs', () => {
+test('guest issuance routes enforce limits and account-link claims are disabled', () => {
   const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
   const booking = read('app/api/bookings/route.ts');
-  const customer = read('app/api/guest/bookings/access/route.ts');
+  const tracker = read('app/api/guest/bookings/access/route.ts');
   const driver = read('app/api/guest/driver-invitations/route.ts');
   const limiter = read('lib/server/rate-limit.ts');
   assert.match(limiter, /guest_tracker_issue: \{ tokenLimit: 10, ipLimit: 40, windowSeconds: 300 \}/);
   assert.ok(booking.indexOf("enforceGuestRateLimit(request, 'guest_tracker_issue'") < booking.indexOf("supabase.rpc('create_booking'"));
   assert.match(booking, /serviceClient\.rpc\(\s*'issue_guest_booking_tracker_token'/);
-  for (const [route, role, rpc] of [
-    [customer, 'customer', 'service_claim_guest_booking_access'],
-    [driver, 'driver', 'service_claim_driver_invitation'],
-  ]) {
-    assert.ok(route.indexOf('enforceGuestRateLimit(request') < route.indexOf(`'${rpc}'`));
-    assert.match(route, new RegExp(`requireRoles\\(\\['${role}'\\]\\)`));
-    assert.match(route, new RegExp(`rpc\\('${rpc}', \\{\\s*p_token: token,\\s*p_user_id: user\\.id`));
-  }
+  assert.ok(tracker.indexOf("enforceGuestRateLimit(request, 'guest_tracker'") < tracker.indexOf("rpc('get_guest_booking_tracker'"));
+  assert.doesNotMatch(tracker, /service_claim_guest_booking_access|requireRoles/);
+  assert.ok(driver.indexOf("enforceGuestRateLimit(request, 'guest_driver_invitation'") < driver.indexOf("rpc('get_guest_driver_invitation'"));
+  assert.doesNotMatch(driver, /service_claim_driver_invitation|action === 'link'|requireRoles/);
 });
 
 test('guest claim checks expiry after locking the booking and token', () => {

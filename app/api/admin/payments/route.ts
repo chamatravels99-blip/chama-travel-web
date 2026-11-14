@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizationResponse, isSameOriginRequest, requireRoles } from '@/lib/server/authorization';
 import { parseAdminCustomerPaymentInput } from '@/lib/admin-customer-payment';
+import { renderAndStoreBillingDocument } from '@/lib/server/documents';
 import {
   parseAdminDriverHireOfferInput,
   parseAdminDriverHirePayoutInput,
@@ -95,11 +96,26 @@ export async function POST(request: Request) {
         console.error('Customer payment RPC returned an unexpected response.');
         return NextResponse.json({ success: false, error: 'The payment result could not be verified.' }, { status: 503 });
       }
+      let receiptDocumentId: string | null = null;
+      const docResult = await supabase.rpc('admin_issue_payment_receipt_document', {
+        p_payment_id: payment.payment_id,
+      });
+      const docRow = Array.isArray(docResult.data) ? docResult.data[0] : null;
+      if (docRow && typeof docRow.document_id === 'string') {
+        const docId: string = docRow.document_id;
+        receiptDocumentId = docId;
+        try {
+          await renderAndStoreBillingDocument(supabase, docId);
+        } catch (renderErr) {
+          console.error('Automatic receipt PDF render failed.', renderErr instanceof Error ? renderErr.message : 'unknown');
+        }
+      }
       return NextResponse.json({
         success: true,
         data: {
           payment_id: payment.payment_id,
           receipt_number: payment.receipt_number,
+          document_id: receiptDocumentId,
           created: payment.created,
         },
       }, { status: payment.created ? 201 : 200 });

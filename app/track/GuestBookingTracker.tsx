@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import GuestDocuments from '@/components/GuestDocuments';
 
 type TrackerData = {
@@ -81,11 +80,8 @@ function titleCase(value: string) {
 
 export default function GuestBookingTracker() {
   const [tracker, setTracker] = useState<TrackerData | null>(null);
-  const [canLinkToAccount, setCanLinkToAccount] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const value = window.location.hash.slice(1);
@@ -99,45 +95,16 @@ export default function GuestBookingTracker() {
         success?: boolean;
         error?: string;
         data?: TrackerData;
-        can_link_to_account?: boolean;
       };
       if (!response.ok || !result.success || !result.data) {
         setError(result.error || 'This booking link is invalid, expired, revoked, or unavailable.');
         return;
       }
       setTracker(result.data);
-      setCanLinkToAccount(result.can_link_to_account === true);
     }).catch(() => {
       setError('Booking details could not be loaded. Please try again.');
     }).finally(() => setLoading(false));
   }, []);
-
-  async function linkToAccount() {
-    const token = window.location.hash.slice(1);
-    if (!tracker || !/^[0-9a-f]{64}$/i.test(token) || !window.confirm(
-      `Link booking ${tracker.booking.booking_ref} to your signed-in customer account?`
-    )) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const response = await fetch('/api/guest/bookings/access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ action: 'claim', token }),
-      });
-      const result = await response.json() as { success?: boolean; error?: string; message?: string };
-      if (!response.ok || !result.success) throw new Error(result.error || 'Booking could not be linked.');
-      setNotice(result.message || 'Booking linked to your customer account.');
-      setTracker(null);
-      setCanLinkToAccount(false);
-    } catch (claimError) {
-      setError(claimError instanceof Error ? claimError.message : 'Booking could not be linked.');
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
@@ -150,8 +117,6 @@ export default function GuestBookingTracker() {
 
         {loading && <p className="rounded-2xl bg-white p-6 text-sm text-slate-600">Loading booking details…</p>}
         {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
-        {notice && <p role="status" className="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">{notice} <Link href="/customer/dashboard" className="font-bold underline">View customer dashboard</Link></p>}
-
         {tracker && (
           <>
             <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
@@ -241,21 +206,6 @@ export default function GuestBookingTracker() {
               </section>
             )}
 
-            {canLinkToAccount && (
-              <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-blue-200 bg-blue-50 p-5">
-                <p className="text-sm text-blue-950">You are signed in as a customer. Link this booking to your account using this private link as ownership proof.</p>
-                <button type="button" disabled={busy} onClick={() => void linkToAccount()} className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">
-                  {busy ? 'Linking…' : 'Link booking to account'}
-                </button>
-              </section>
-            )}
-            {!canLinkToAccount && (
-              <p className="text-center text-xs text-slate-500">
-                Want this booking in your account? Keep this link, sign in or register, then reopen it to link the booking.
-                {' '}<Link href="/login" className="font-bold text-blue-700 underline">Sign in</Link>
-                {' '}or <Link href="/register" className="font-bold text-blue-700 underline">register</Link>.
-              </p>
-            )}
           </>
         )}
       </div>

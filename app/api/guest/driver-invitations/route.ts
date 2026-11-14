@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizationResponse, isSameOriginRequest, requireRoles } from '@/lib/server/authorization';
+import { isSameOriginRequest } from '@/lib/server/authorization';
 import { isUuid, readJsonBody } from '@/lib/server/documents';
 import { enforceGuestRateLimit } from '@/lib/server/rate-limit';
 import { createServiceClient } from '@/lib/server/service-client';
@@ -20,27 +20,12 @@ export async function POST(request: Request) {
   const action = input.action;
   const token = input.token;
   if (!isGuestBookingToken(token)) return fail(GENERIC, 404);
-  if (!['view', 'accept', 'decline', 'offer', 'link'].includes(String(action))) return fail('Request is invalid.', 400);
+  if (!['view', 'accept', 'decline', 'offer'].includes(String(action))) return fail('Request is invalid.', 400);
 
-  const limited = await enforceGuestRateLimit(request, action === 'link' ? 'guest_driver_link' : 'guest_driver_invitation', token);
+  const limited = await enforceGuestRateLimit(request, 'guest_driver_invitation', token);
   if (limited) return limited;
 
   try {
-    if (action === 'link') {
-      const { user } = await requireRoles(['driver']);
-      const service = createServiceClient();
-      if (!service) return fail('This service is temporarily unavailable.', 503);
-      const { error } = await service.rpc('service_claim_driver_invitation', {
-        p_token: token,
-        p_user_id: user.id,
-      });
-      if (error) {
-        console.error('Driver invitation link failed.', error.code);
-        return fail('This invitation cannot be linked to your account.', 409);
-      }
-      return NextResponse.json({ success: true, redirect: '/driver/dashboard' }, { headers: NO_STORE });
-    }
-
     const service = createServiceClient();
     if (!service) return fail('This service is temporarily unavailable.', 503);
 
@@ -74,6 +59,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ success: true }, { headers: NO_STORE });
   } catch (error) {
-    return authorizationResponse(error);
+    console.error('Guest driver invitation operation failed.', error);
+    return fail(GENERIC, 500);
   }
 }

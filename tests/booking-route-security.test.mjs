@@ -221,7 +221,7 @@ test('booking retries pass the same idempotency key to the service RPC', async (
   );
 });
 
-test('guest claim uses the authenticated customer rather than a browser-supplied ID', async () => {
+test('guest booking tracker does not allow linking a customer account', async () => {
   const calls = [];
   const route = loadModule('../app/api/guest/bookings/access/route.ts', {
     'next/server': { NextResponse: { json: Response.json } },
@@ -245,10 +245,8 @@ test('guest claim uses the authenticated customer rather than a browser-supplied
   const response = await route.POST(request({
     action: 'claim', token, user_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
   }));
-  assert.equal(response.status, 200);
-  assert.equal(calls[0].name, 'service_claim_guest_booking_access');
-  assert.equal(calls[0].args.p_user_id, customerId);
-  assert.equal(calls[0].args.p_token, token);
+  assert.equal(response.status, 404);
+  assert.equal(calls.length, 0);
 });
 
 test('persistent booking limiter denies excess requests and fails closed on errors', async () => {

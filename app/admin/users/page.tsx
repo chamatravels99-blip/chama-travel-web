@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, ShieldCheck, UserPlus, Users } from 'lucide-react';
 
-type AppRole = 'super_admin' | 'admin' | 'operator' | 'driver' | 'customer';
+type AppRole = 'super_admin' | 'admin';
 type AccountStatus = 'active' | 'inactive';
 type UserRecord = {
   id: string;
@@ -13,15 +13,13 @@ type UserRecord = {
   account_status: AccountStatus;
   created_at: string;
   roles: AppRole[];
+  legacy_roles: string[];
 };
 
 const PAGE_SIZE = 50;
 const ROLE_LABELS: Record<AppRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
-  operator: 'Operator',
-  driver: 'Driver',
-  customer: 'Customer',
 };
 
 export default function UsersPage() {
@@ -40,12 +38,11 @@ export default function UsersPage() {
   const [selectedRoles, setSelectedRoles] = useState<Record<string, AppRole>>({});
   const [busyUserId, setBusyUserId] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createRole, setCreateRole] = useState<'admin' | 'operator' | 'driver'>('driver');
   const [newUser, setNewUser] = useState({ full_name: '', email: '', phone: '', password: '' });
   const [creating, setCreating] = useState(false);
 
   const isSuperAdmin = actorRoles.includes('super_admin');
-  const canCreateStaff = isSuperAdmin || actorRoles.includes('admin');
+  const canCreateStaff = isSuperAdmin;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,21 +115,20 @@ export default function UsersPage() {
     setNotice('');
     setError('');
     try {
-      const isDriver = createRole === 'driver';
-      const response = await fetch(isDriver ? '/api/admin/create-driver' : '/api/admin/users', {
+        const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isDriver ? newUser : { ...newUser, role: createRole }),
+          body: JSON.stringify({ ...newUser, role: 'admin' }),
       });
       const result = await response.json() as { success?: boolean; error?: string; message?: string };
-      if (!response.ok || !result.success) throw new Error(result.error || 'Staff account could not be created.');
-      setNotice(result.message || `${ROLE_LABELS[createRole]} account created.`);
+      if (!response.ok || !result.success) throw new Error(result.error || 'Admin account could not be created.');
+      setNotice(result.message || 'Admin account created.');
       setNewUser({ full_name: '', email: '', phone: '', password: '' });
       setShowCreateForm(false);
       setPage(1);
       await load();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Staff account could not be created.');
+      setError(createError instanceof Error ? createError.message : 'Admin account could not be created.');
     } finally {
       setCreating(false);
     }
@@ -140,13 +136,10 @@ export default function UsersPage() {
 
   function canManageUser(user: UserRecord) {
     if (user.roles.includes('super_admin')) return false;
-    const isPrivilegedStaff = user.roles.some((role) => role === 'admin' || role === 'operator');
-    return isSuperAdmin || !isPrivilegedStaff;
+    return isSuperAdmin || (user.legacy_roles.length === 0 && !user.roles.includes('admin'));
   }
 
-  const roleOptions: AppRole[] = isSuperAdmin
-    ? ['customer', 'driver', 'operator', 'admin']
-    : ['customer', 'driver'];
+  const roleOptions: AppRole[] = isSuperAdmin ? ['admin'] : [];
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
@@ -186,21 +179,12 @@ export default function UsersPage() {
           <div className="md:col-span-2">
             <h2 className="font-extrabold text-slate-900">Create staff account</h2>
             <p className="mt-1 text-xs text-slate-500">
-              Existing email addresses are not duplicated. Search for an existing account to manage its eligible role.
-              {isSuperAdmin ? ' Only Super Admin can create Admin or Operator accounts.' : ' You can provision driver accounts.'}
+              Existing email addresses are not duplicated. Only a Super Admin can create an Admin account.
             </p>
           </div>
           <label className="text-xs font-bold text-slate-700">
-            Account role
-            <select
-              value={createRole}
-              onChange={(event) => setCreateRole(event.target.value as 'admin' | 'operator' | 'driver')}
-              className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm font-normal"
-            >
-              <option value="driver">Driver</option>
-              {isSuperAdmin && <option value="operator">Operator</option>}
-              {isSuperAdmin && <option value="admin">Admin</option>}
-            </select>
+            Application role
+            <input value="Admin" readOnly className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-normal" />
           </label>
           <label className="text-xs font-bold text-slate-700">
             Full name
@@ -220,7 +204,7 @@ export default function UsersPage() {
           </label>
           <div className="flex items-center gap-2 md:col-span-2">
             <button disabled={creating} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
-              {creating ? 'Creating…' : `Create ${ROLE_LABELS[createRole]}`}
+              {creating ? 'Creating…' : 'Create Admin'}
             </button>
             <button type="button" onClick={() => setShowCreateForm(false)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700">
               Cancel
@@ -285,9 +269,9 @@ export default function UsersPage() {
               <tbody className="divide-y divide-slate-100">
                 {users.map((user) => {
                   const manageable = canManageUser(user);
-                  const hasPrivilegedRole = user.roles.some((role) => role === 'admin' || role === 'operator');
-                  const canChange = manageable && (isSuperAdmin || !hasPrivilegedRole) && user.account_status === 'active';
-                  const roleValue = selectedRoles[user.id] ?? user.roles[0] ?? 'customer';
+                  const hasPrivilegedRole = user.roles.includes('admin') || user.legacy_roles.length > 0;
+                  const canChange = manageable && isSuperAdmin && !user.legacy_roles.includes('driver') && user.account_status === 'active';
+                  const roleValue = selectedRoles[user.id] ?? user.roles[0] ?? 'admin';
                   return (
                     <tr key={user.id} className="align-top hover:bg-slate-50/70">
                       <td className="max-w-72 px-4 py-4">
@@ -309,7 +293,8 @@ export default function UsersPage() {
                         <div className="flex max-w-48 flex-wrap gap-1">
                           {user.roles.length
                             ? user.roles.map((role) => <span key={role} className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-800">{ROLE_LABELS[role]}</span>)
-                            : <span className="text-xs text-slate-400">No active role</span>}
+                            : <span className="text-xs text-slate-400">No active Admin role</span>}
+                          {user.legacy_roles.map((role) => <span key={role} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">{role === 'driver' ? 'Internal driver record' : `Legacy ${role}`}</span>)}
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -354,9 +339,7 @@ export default function UsersPage() {
                                 {user.account_status === 'active' ? 'Deactivate' : 'Activate'}
                               </button>
                             )}
-                            {!canChange && !(isSuperAdmin || !hasPrivilegedRole) && (
-                              <span className="text-xs text-slate-400">Super Admin management only</span>
-                            )}
+                            {!canChange && (hasPrivilegedRole || user.legacy_roles.length > 0) && !isSuperAdmin && <span className="text-xs text-slate-400">Super Admin management only</span>}
                           </div>
                         ) : (
                           <span className="text-xs font-semibold text-slate-400">Protected account</span>

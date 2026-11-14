@@ -7,8 +7,8 @@ import {
   type AppRole,
 } from '@/lib/server/authorization';
 
-const USER_ROLES = new Set<AppRole>(['super_admin', 'admin', 'operator', 'driver', 'customer']);
-const MUTABLE_ROLES = new Set<AppRole>(['admin', 'operator', 'driver', 'customer']);
+const USER_ROLES = new Set<AppRole>(['super_admin', 'admin']);
+const MUTABLE_ROLES = new Set<AppRole>(['admin']);
 const ACCOUNT_STATUSES = new Set(['active', 'inactive']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -88,7 +88,12 @@ export async function GET(request: Request) {
         phone: row.phone,
         account_status: row.account_status,
         created_at: row.created_at,
-        roles: row.roles,
+        roles: Array.isArray(row.roles)
+          ? row.roles.filter((role: unknown): role is AppRole => typeof role === 'string' && USER_ROLES.has(role as AppRole))
+          : [],
+        legacy_roles: Array.isArray(row.roles)
+          ? row.roles.filter((role: unknown): role is string => typeof role === 'string' && !USER_ROLES.has(role as AppRole))
+          : [],
       })),
       total_count: typeof rows[0]?.total_count === 'number' ? rows[0].total_count : 0,
       page,
@@ -121,9 +126,9 @@ export async function POST(request: Request) {
         fullName.length < 2 || fullName.length > 120 ||
         (phone && !PHONE_PATTERN.test(phone)) ||
         password.length < 12 || password.length > 128 ||
-        !['admin', 'operator'].includes(role)) {
+        role !== 'admin') {
       return NextResponse.json(
-        { success: false, error: 'Provide a valid email, name, optional phone, 12–128 character password, and Admin or Operator role.' },
+        { success: false, error: 'Provide a valid email, name, optional phone, 12–128 character password, and Admin role.' },
         { status: 400 }
       );
     }
@@ -156,14 +161,14 @@ export async function POST(request: Request) {
         {
           success: false,
           error: duplicate
-            ? 'The email already belongs to an account. Search for it and use role management instead.'
+            ? 'The email already belongs to an account. Search for that account or use another email address.'
             : 'The account could not be provisioned. If the problem persists, contact support.',
         },
         { status }
       );
     }
 
-    return NextResponse.json({ success: true, message: `${role === 'admin' ? 'Admin' : 'Operator'} account created.` }, { status: 201 });
+    return NextResponse.json({ success: true, message: 'Admin account created.' }, { status: 201 });
   } catch (error) {
     return authorizationResponse(error);
   }
@@ -198,9 +203,35 @@ export async function PATCH(request: Request) {
       if (!MUTABLE_ROLES.has(role as AppRole)) {
         return NextResponse.json({ success: false, error: 'The requested role cannot be assigned.' }, { status: 400 });
       }
-      if (role === 'admin' || role === 'operator') {
-        if (!roles.includes('super_admin')) {
-          return NextResponse.json({ success: false, error: 'Only a Super Admin can manage privileged staff roles.' }, { status: 403 });
+      if (role === 'admin' && !roles.includes('super_admin')) {
+        return NextResponse.json({ success: false, error: 'Only a Super Admin can manage Admin roles.' }, { status: 403 });
+      }
+      const { data: driverRole, error: driverRoleError } = await adminClient
+        .from('roles')
+        .select('id')
+        .eq('code', 'driver')
+        .maybeSingle();
+      if (driverRoleError) {
+        console.error('Driver record role could not be verified.', driverRoleError.code);
+        return NextResponse.json({ success: false, error: 'The existing driver record could not be verified.' }, { status: 503 });
+      }
+      if (driverRole) {
+        const { data: driverAssignments, error: assignmentError } = await adminClient
+          .from('user_roles')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('role_id', driverRole.id)
+          .is('revoked_at', null)
+          .limit(1);
+        if (assignmentError) {
+          console.error('Driver record role could not be verified.', assignmentError.code);
+          return NextResponse.json({ success: false, error: 'The existing driver record could not be verified.' }, { status: 503 });
+        }
+        if (driverAssignments?.length) {
+          return NextResponse.json(
+            { success: false, error: 'Driver records cannot be converted to Admin accounts; create a separate Admin account.' },
+            { status: 409 }
+          );
         }
       }
       ({ error } = await adminClient.rpc('admin_change_user_role', {
