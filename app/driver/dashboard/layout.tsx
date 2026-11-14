@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import SupabaseRuntimeConfig from '@/app/components/SupabaseRuntimeConfig';
 import { AuthorizationError, getAuthenticatedContext } from '@/lib/server/authorization';
 
 export default async function DriverLayout({
@@ -19,5 +20,10 @@ export default async function DriverLayout({
     redirect('/login?error=unauthorized');
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <SupabaseRuntimeConfig />
+      {children}
+    </>
+  );
 }

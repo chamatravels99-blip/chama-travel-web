@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { requiredRolesForPath } from '@/utils/supabase/route-roles';
 
 /**
  * Refreshes auth session cookies on each request and enforces
@@ -30,14 +31,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const requiredRoles =
-    pathname === '/admin' || pathname.startsWith('/admin/')
-      ? ['admin', 'super_admin', 'operator']
-      : pathname === '/driver' || pathname.startsWith('/driver/')
-        ? ['driver', 'admin', 'super_admin']
-        : pathname === '/customer' || pathname.startsWith('/customer/')
-          ? ['customer']
-          : null;
+  const requiredRoles = requiredRolesForPath(pathname);
 
   if (requiredRoles) {
     response.headers.set('Cache-Control', 'private, no-store');

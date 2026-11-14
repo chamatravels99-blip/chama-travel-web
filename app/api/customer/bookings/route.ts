@@ -34,7 +34,7 @@ export async function GET() {
         .in('booking_id', bookingIds)
         .order('submitted_at', { ascending: false }),
       supabase.from('payments')
-        .select('id, booking_id, quote_id, entry_type, amount, currency, method, verified_at, created_at')
+        .select('id, booking_id, quote_id, entry_type, amount, currency, method, receipt_number, payment_date, verified_at, created_at')
         .in('booking_id', bookingIds)
         .order('created_at', { ascending: false }),
       supabase.from('booking_events')

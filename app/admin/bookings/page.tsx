@@ -1,6 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import BookingOperations from './BookingOperations';
+import BookingActivity from './BookingActivity';
+import BookingBillingPanel from './BookingBillingPanel';
+import { whatsAppLink } from '@/lib/whatsapp';
+import { getGuestQuoteLinkState } from '@/lib/guest-quote-link';
 import {
   Calendar,
   Car,
@@ -29,6 +34,10 @@ type BookingQuote = {
   total: number;
   quote_status: string;
   expires_at: string;
+  has_guest_acceptance_link: boolean;
+  token_expires_at: string | null;
+  token_consumed_at: string | null;
+  token_revoked_at: string | null;
 };
 
 type Booking = {
@@ -57,10 +66,20 @@ type Booking = {
 
 type Driver = { id: string; full_name: string; phone: string | null };
 type Vehicle = { id: string; display_name: string; category_name: string };
+type GuestTrackerState = {
+  booking_id: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  active: boolean;
+};
 type OperationsResponse = {
   success?: boolean;
   error?: string;
-  data?: { bookings: Booking[]; resources: { drivers: Driver[]; vehicles: Vehicle[] } };
+  data?: {
+    bookings: Booking[];
+    resources: { drivers: Driver[]; vehicles: Vehicle[] };
+    guest_tracker_states?: GuestTrackerState[];
+  };
   roles?: string[];
 };
 type OperationResponse = { success?: boolean; error?: string; data?: { acceptance_url?: string | null } };
@@ -109,14 +128,11 @@ function statusBadgeClasses(status: string) {
   return 'bg-slate-100 text-slate-700 ring-slate-600/10';
 }
 
-function quoteExpiryAfter48Hours() {
-  return new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-}
-
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [guestTrackerStates, setGuestTrackerStates] = useState<GuestTrackerState[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -125,13 +141,15 @@ export default function AdminBookingsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [serviceFilter, setServiceFilter] = useState('');
   const [journeyFilter, setJourneyFilter] = useState('');
+  const [driverFilter, setDriverFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [expandedBookingId, setExpandedBookingId] = useState('');
   const [assignments, setAssignments] = useState<Record<string, { driver: string; vehicle: string }>>({});
   const [savingAction, setSavingAction] = useState('');
-  const [acceptanceUrl, setAcceptanceUrl] = useState('');
+  const [acceptanceLink, setAcceptanceLink] = useState<{ bookingId: string; url: string } | null>(null);
 
   const loadBookings = useCallback(async () => {
     setLoading(true);
@@ -144,6 +162,7 @@ export default function AdminBookingsPage() {
       setBookings(result.data.bookings);
       setDrivers(result.data.resources.drivers);
       setVehicles(result.data.resources.vehicles);
+      setGuestTrackerStates(result.data.guest_tracker_states ?? []);
       setRoles(result.roles ?? []);
       setError('');
     } catch (loadError) {
@@ -186,9 +205,11 @@ export default function AdminBookingsPage() {
         (!statusFilter || booking.booking_status === statusFilter) &&
         (!serviceFilter || booking.service_type === serviceFilter) &&
         (!journeyFilter || booking.journey_type === journeyFilter) &&
+        (!driverFilter || booking.assignment?.driver_user_id === driverFilter) &&
+        (!vehicleFilter || booking.assignment?.vehicle_id === vehicleFilter) &&
         matchesDates;
     });
-  }, [bookings, dateFrom, dateTo, journeyFilter, search, serviceFilter, statusFilter]);
+  }, [bookings, dateFrom, dateTo, driverFilter, journeyFilter, search, serviceFilter, statusFilter, vehicleFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredBookings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -206,31 +227,6 @@ export default function AdminBookingsPage() {
       throw new Error(result.error || 'The booking operation could not be completed.');
     }
     return result;
-  }
-
-  async function issueQuote(booking: Booking) {
-    setSavingAction(booking.id);
-    setNotice('');
-    setError('');
-    setAcceptanceUrl('');
-    try {
-      const result = await postOperation({
-        action: 'issue_quote',
-        booking_id: booking.id,
-        currency: booking.currency,
-        expires_at: quoteExpiryAfter48Hours(),
-      });
-      const url = typeof result.data?.acceptance_url === 'string' ? result.data.acceptance_url : '';
-      setAcceptanceUrl(url);
-      setNotice(url
-        ? 'Quote issued. Share the one-time acceptance link with the guest privately.'
-        : 'Quote issued. The customer can review and accept it in their dashboard.');
-      await loadBookings();
-    } catch (operationError) {
-      setError(operationError instanceof Error ? operationError.message : 'The quote could not be issued.');
-    } finally {
-      setSavingAction('');
-    }
   }
 
   async function assignBooking(booking: Booking) {
@@ -253,6 +249,60 @@ export default function AdminBookingsPage() {
       await loadBookings();
     } catch (operationError) {
       setError(operationError instanceof Error ? operationError.message : 'Assignment failed.');
+    } finally {
+      setSavingAction('');
+    }
+  }
+
+  async function revokeGuestTracker(booking: Booking) {
+    if (!window.confirm(`Revoke the private guest tracker link for ${booking.booking_ref}?`)) return;
+    setSavingAction(booking.id);
+    setError('');
+    setNotice('');
+    try {
+      await postOperation({
+        action: 'revoke_guest_booking_tracker',
+        booking_id: booking.id,
+      });
+      setNotice(`Guest tracker access revoked for ${booking.booking_ref}.`);
+      await loadBookings();
+    } catch (operationError) {
+      setError(operationError instanceof Error ? operationError.message : 'Guest tracker link could not be revoked.');
+    } finally {
+      setSavingAction('');
+    }
+  }
+
+  async function recordWhatsAppConfirmation(quoteId: string) {
+    if (!window.confirm('Record that the customer accepted this quote through WhatsApp?')) return;
+    setSavingAction(quoteId);
+    setNotice('');
+    setError('');
+    try {
+      await postOperation({ action: 'record_whatsapp_confirmation', quote_id: quoteId });
+      setNotice('WhatsApp confirmation recorded and the booking is confirmed.');
+      await loadBookings();
+    } catch (operationError) {
+      setError(operationError instanceof Error ? operationError.message : 'WhatsApp confirmation could not be recorded.');
+    } finally {
+      setSavingAction('');
+    }
+  }
+
+  async function revokeGuestQuoteLink(bookingId: string, quoteId: string) {
+    if (!window.confirm(
+      'Revoke this guest acceptance link now? This cannot be undone. The quote amount, booking status and payment records will not change.'
+    )) return;
+    setSavingAction(quoteId);
+    setNotice('');
+    setError('');
+    try {
+      await postOperation({ action: 'revoke_guest_quote_link', quote_id: quoteId });
+      setAcceptanceLink((current) => current?.bookingId === bookingId ? null : current);
+      setNotice('Guest acceptance link revoked. The quote, booking status and payment records are unchanged.');
+      await loadBookings();
+    } catch (operationError) {
+      setError(operationError instanceof Error ? operationError.message : 'Guest quote link could not be revoked.');
     } finally {
       setSavingAction('');
     }
@@ -284,10 +334,10 @@ export default function AdminBookingsPage() {
       {notice && (
         <div role="status" className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           {notice}
-          {acceptanceUrl && (
+          {acceptanceLink && (
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <a className="break-all font-semibold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" href={acceptanceUrl} target="_blank" rel="noreferrer">Guest acceptance link</a>
-              <button type="button" className="inline-flex items-center gap-1 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={() => void navigator.clipboard.writeText(acceptanceUrl)}>
+              <a className="break-all font-semibold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" href={acceptanceLink.url} target="_blank" rel="noreferrer">Guest acceptance link</a>
+              <button type="button" className="inline-flex items-center gap-1 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={() => void navigator.clipboard.writeText(acceptanceLink.url)}>
                 <Clipboard className="h-4 w-4" /> Copy link
               </button>
             </div>
@@ -295,6 +345,19 @@ export default function AdminBookingsPage() {
         </div>
       )}
       {error && <p role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
+
+      {!loading && !error && <section aria-label="Booking overview" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Pending review', count: bookings.filter((b) => ['pending', 'reviewing'].includes(b.booking_status)).length },
+          { label: 'Awaiting customer', count: bookings.filter((b) => b.booking_status === 'quoted').length },
+          { label: 'Confirmed', count: bookings.filter((b) => b.booking_status === 'confirmed').length },
+          { label: 'Awaiting driver', count: bookings.filter((b) => b.assignment?.assignment_status === 'offered').length },
+          { label: 'Driver accepted', count: bookings.filter((b) => b.assignment?.assignment_status === 'accepted').length },
+          { label: 'Active trips', count: bookings.filter((b) => b.booking_status === 'in_progress').length },
+          { label: 'Completed', count: bookings.filter((b) => b.booking_status === 'completed').length },
+          { label: 'Cancelled or rejected', count: bookings.filter((b) => ['cancelled', 'rejected'].includes(b.booking_status)).length },
+        ].map((item) => <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold text-slate-600">{item.label}</p><p className="mt-1 text-xl font-black text-slate-900">{item.count}</p></div>)}
+      </section>}
 
       <section aria-label="Booking filters" className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -325,6 +388,20 @@ export default function AdminBookingsPage() {
             </select>
           </label>
           <label className="min-w-0">
+            <span className="sr-only">Filter by assigned driver</span>
+            <select value={driverFilter} onChange={(event) => updateFilter(() => setDriverFilter(event.target.value))} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm text-slate-700">
+              <option value="">All drivers</option>
+              {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.full_name}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className="sr-only">Filter by assigned vehicle</span>
+            <select value={vehicleFilter} onChange={(event) => updateFilter(() => setVehicleFilter(event.target.value))} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm text-slate-700">
+              <option value="">All vehicles</option>
+              {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.display_name}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0">
             <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">Pickup from</span>
             <input type="date" value={dateFrom} onChange={(event) => updateFilter(() => setDateFrom(event.target.value))} className="w-full min-w-0 rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
           </label>
@@ -335,7 +412,7 @@ export default function AdminBookingsPage() {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
           <span>{filteredBookings.length} booking(s)</span>
-          <button type="button" onClick={() => { setSearch(''); setStatusFilter(''); setServiceFilter(''); setJourneyFilter(''); setDateFrom(''); setDateTo(''); setPage(1); }} className="rounded-lg px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Clear filters</button>
+          <button type="button" onClick={() => { setSearch(''); setStatusFilter(''); setServiceFilter(''); setJourneyFilter(''); setDriverFilter(''); setVehicleFilter(''); setDateFrom(''); setDateTo(''); setPage(1); }} className="rounded-lg px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Clear filters</button>
         </div>
       </section>
 
@@ -352,10 +429,16 @@ export default function AdminBookingsPage() {
           const assignment = booking.assignment;
           const assignedDriver = assignment ? driverById.get(assignment.driver_user_id) : undefined;
           const assignedVehicle = assignment ? vehicleById.get(assignment.vehicle_id) : undefined;
+          const guestTrackerState = guestTrackerStates.find((item) => item.booking_id === booking.id);
           const selection = assignments[booking.id] ?? { driver: '', vehicle: '' };
           const expanded = expandedBookingId === booking.id;
-          const canIssueQuote = ['pending', 'reviewing', 'quoted'].includes(booking.booking_status);
           const canAssign = booking.booking_status === 'confirmed' && !assignment;
+          const bookingAcceptanceUrl = acceptanceLink?.bookingId === booking.id ? acceptanceLink.url : null;
+          const customerMessage = latestQuote?.quote_status === 'sent'
+            ? `Hello from Chama Travels. Your quote for booking ${booking.booking_ref} is ${latestQuote.currency} ${Number(latestQuote.total).toFixed(2)}.${bookingAcceptanceUrl ? ` Review and accept it securely here: ${bookingAcceptanceUrl}` : ' Please contact us or check your customer dashboard.'}`
+            : `Hello from Chama Travels. Please contact us about your booking ${booking.booking_ref}.`;
+          const customerWhatsApp = whatsAppLink(booking.customer_phone, customerMessage);
+          const driverWhatsApp = whatsAppLink(assignedDriver?.phone ?? null, `Hello from Chama Travels. Please check your driver dashboard for booking ${booking.booking_ref}.`);
 
           return (
             <article key={booking.id} className="min-w-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
@@ -393,11 +476,6 @@ export default function AdminBookingsPage() {
                   <button type="button" aria-expanded={expanded} onClick={() => setExpandedBookingId(expanded ? '' : booking.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
                     <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} /> {expanded ? 'Hide details' : 'View booking details'}
                   </button>
-                  {canOperate && (
-                    <div className="flex flex-wrap gap-2">
-                      {canIssueQuote && <button type="button" disabled={savingAction === booking.id} onClick={() => void issueQuote(booking)} className="rounded-xl bg-blue-700 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-50">{savingAction === booking.id ? 'Issuing…' : booking.booking_status === 'quoted' ? 'Reissue quote' : 'Issue quote'}</button>}
-                    </div>
-                  )}
                 </div>
 
                 {canOperate && canAssign && (
@@ -422,6 +500,30 @@ export default function AdminBookingsPage() {
 
                 {expanded && (
                   <div className="space-y-4 border-t border-slate-100 pt-4">
+                    {guestTrackerState && (
+                      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800">Guest tracker access</h3>
+                          <p className="mt-1 text-xs text-slate-600">
+                            {guestTrackerState.active && guestTrackerState.expires_at
+                              ? `Active until ${formatDate(guestTrackerState.expires_at)}`
+                              : guestTrackerState.revoked_at
+                                ? `Revoked ${formatDate(guestTrackerState.revoked_at)}`
+                                : 'Unavailable or expired'}
+                          </p>
+                        </div>
+                        {guestTrackerState.active && roles.some((role) => ['admin', 'super_admin'].includes(role)) && (
+                          <button
+                            type="button"
+                            disabled={savingAction === booking.id}
+                            onClick={() => void revokeGuestTracker(booking)}
+                            className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50"
+                          >
+                            Revoke guest link
+                          </button>
+                        )}
+                      </section>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Booking created</p><p className="mt-1 text-xs font-semibold text-slate-800">{formatDate(booking.created_at)}</p></div>
                       <div className="rounded-2xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Passengers / luggage</p><p className="mt-1 text-xs font-semibold text-slate-800">{booking.passenger_count} passenger(s) · {booking.luggage_count} bag(s)</p></div>
@@ -440,16 +542,85 @@ export default function AdminBookingsPage() {
                       ))}
                     </div>
                     {booking.customer_notes && <p className="break-words rounded-2xl bg-slate-50 p-3 text-xs leading-5 text-slate-700"><b>Customer notes:</b> {booking.customer_notes}</p>}
+                    {canOperate && (customerWhatsApp || driverWhatsApp) && <div className="flex flex-wrap gap-3 text-xs font-bold text-emerald-700">
+                      {customerWhatsApp && <a href={customerWhatsApp} target="_blank" rel="noopener noreferrer" className="underline">Contact customer on WhatsApp</a>}
+                      {driverWhatsApp && <a href={driverWhatsApp} target="_blank" rel="noopener noreferrer" className="underline">Contact driver on WhatsApp</a>}
+                    </div>}
+                    {canOperate && <BookingOperations bookingId={booking.id} status={booking.booking_status} currency={booking.currency} legs={booking.legs} onUpdated={async (url) => {
+                      if (url) {
+                        setAcceptanceLink({ bookingId: booking.id, url });
+                        setNotice('Quote issued. Share the one-time acceptance link with the guest privately.');
+                      } else {
+                        setAcceptanceLink((current) => current?.bookingId === booking.id ? null : current);
+                        setNotice('Booking updated.');
+                      }
+                      await loadBookings();
+                    }} />}
                     {booking.quotes.length > 0 && (
                       <div className="space-y-2">
                         <h3 className="text-sm font-extrabold text-slate-900">Quotes</h3>
                         {booking.quotes.map((quote) => (
                           <div key={quote.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/70 bg-white p-3">
                             <span className="text-xs font-semibold text-slate-700">Revision {quote.revision} · {quote.currency} {Number(quote.total).toFixed(2)}</span>
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(quote.quote_status)}`}>{quote.quote_status}</span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(quote.quote_status)}`}>{quote.quote_status}</span>
+                              {quote.has_guest_acceptance_link && (() => {
+                                const linkState = getGuestQuoteLinkState(quote);
+                                const linkLabels = {
+                                  active: 'Guest link active',
+                                  expired: 'Guest link expired',
+                                  revoked: 'Guest link revoked',
+                                  accepted: 'Guest link used',
+                                  unavailable: 'Guest link unavailable',
+                                };
+                                return (
+                                  <>
+                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700">
+                                      {linkLabels[linkState]}
+                                    </span>
+                                    {roles.some((role) => ['admin', 'super_admin'].includes(role)) &&
+                                      booking.booking_status === 'quoted' &&
+                                      linkState === 'active' && (
+                                        <button
+                                          type="button"
+                                          disabled={savingAction === quote.id}
+                                          onClick={() => void revokeGuestQuoteLink(booking.id, quote.id)}
+                                          className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-bold text-rose-700 disabled:opacity-50"
+                                        >
+                                          {savingAction === quote.id ? 'Revoking…' : 'Revoke guest link'}
+                                        </button>
+                                      )}
+                                  </>
+                                );
+                              })()}
+                              {roles.some((role) => ['admin', 'super_admin'].includes(role)) &&
+                                booking.booking_status === 'quoted' &&
+                                quote.quote_status === 'sent' &&
+                                Date.parse(quote.expires_at) > Date.now() && (
+                                  <button
+                                    type="button"
+                                    disabled={savingAction === quote.id}
+                                    onClick={() => void recordWhatsAppConfirmation(quote.id)}
+                                    className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-bold text-emerald-800 disabled:opacity-50"
+                                  >
+                                    {savingAction === quote.id ? 'Recording…' : 'Record WhatsApp acceptance'}
+                                  </button>
+                                )}
+                            </div>
                           </div>
                         ))}
                       </div>
+                    )}
+                    {roles.some((role) => ['admin', 'super_admin'].includes(role)) && (
+                      <BookingBillingPanel
+                        bookingId={booking.id}
+                        bookingRef={booking.booking_ref}
+                        acceptedQuoteId={booking.quotes.find((quote) => quote.quote_status === 'accepted')?.id ?? null}
+                        assignmentId={assignment && ['offered', 'accepted'].includes(assignment.assignment_status) ? assignment.id : null}
+                      />
+                    )}
+                    {roles.some((role) => ['admin', 'super_admin'].includes(role)) && (
+                      <BookingActivity bookingId={booking.id} />
                     )}
                   </div>
                 )}

@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { whatsAppLink } from '@/lib/whatsapp';
 
 type Claim = {
   id: string;
@@ -19,6 +21,7 @@ type Claim = {
 };
 type Payment = {
   id: string;
+  booking_id: string;
   booking_ref: string;
   entry_type: string;
   original_payment_id: string | null;
@@ -26,6 +29,8 @@ type Payment = {
   currency: string;
   method: string;
   refund_reason: string | null;
+  receipt_number: string | null;
+  payment_date: string | null;
   verified_at: string;
 };
 type Settlement = {
@@ -40,24 +45,125 @@ type Settlement = {
   created_at: string;
   paid_at: string | null;
 };
-type SettlementCandidate = {
+type DriverHireCandidate = {
   assignment_id: string;
   booking_ref: string;
+  driver_user_id: string;
   driver_name: string;
+  assignment_status: string;
+  current_offer_id: string | null;
+  current_offer_status: 'offered' | 'accepted' | 'declined' | null;
+  current_amount: number | null;
+  current_currency: string | null;
+};
+type CustomerPaymentCandidate = {
+  booking_id: string;
+  booking_ref: string;
+  customer_name: string;
+  customer_phone: string;
+  quote_id: string;
   currency: string;
-  quote_total: number;
+  total: number;
+  amount_paid: number;
+  balance: number;
+};
+type CustomerPaymentInput = {
+  amount: string;
+  method: string;
+  payment_date: string;
+  reference: string;
+  request_id: string;
+};
+type DriverHireOffer = {
+  id: string;
+  assignment_id: string;
+  booking_ref: string;
+  driver_user_id: string;
+  driver_name: string;
+  revision: number;
+  amount: number;
+  currency: string;
+  offer_status: 'offered' | 'accepted' | 'declined';
+  is_current: boolean;
+  created_at: string;
+  responded_at: string | null;
+  paid_total: number;
+  outstanding: number | null;
+};
+type DriverHirePayout = {
+  id: string;
+  assignment_id: string;
+  booking_ref: string;
+  driver_user_id: string;
+  driver_name: string;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  payment_method: string;
+  payment_reference: string | null;
+  recorded_at: string;
+};
+type DriverHireFinance = {
+  candidates: DriverHireCandidate[];
+  offers: DriverHireOffer[];
+  offer_history: DriverHireOffer[];
+  payouts: DriverHirePayout[];
+};
+type DriverHireOfferInput = {
+  amount: string;
+  currency: string;
+  request_id: string;
+};
+type DriverHirePayoutInput = {
+  amount: string;
+  payment_date: string;
+  method: string;
+  reference: string;
+  request_id: string;
 };
 
-export default function PaymentsPage() {
+const EMPTY_CUSTOMER_PAYMENT: CustomerPaymentInput = {
+  amount: '',
+  method: 'cash',
+  payment_date: '',
+  reference: '',
+  request_id: '',
+};
+const EMPTY_DRIVER_HIRE_OFFER: DriverHireOfferInput = {
+  amount: '',
+  currency: 'LKR',
+  request_id: '',
+};
+const EMPTY_DRIVER_HIRE_PAYOUT: DriverHirePayoutInput = {
+  amount: '',
+  payment_date: '',
+  method: 'bank_transfer',
+  reference: '',
+  request_id: '',
+};
+
+function PaymentsPageContent() {
+  const searchParams = useSearchParams();
+  const bookingFilter = searchParams.get('booking_id') ?? '';
+  const bookingRefFilter = searchParams.get('booking_ref') ?? '';
   const [claims, setClaims] = useState<Claim[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
-  const [settlementCandidates, setSettlementCandidates] = useState<SettlementCandidate[]>([]);
-  const [settlementAmounts, setSettlementAmounts] = useState<Record<string, string>>({});
+  const [customerPaymentCandidates, setCustomerPaymentCandidates] = useState<CustomerPaymentCandidate[]>([]);
+  const [driverHireFinance, setDriverHireFinance] = useState<DriverHireFinance>({
+    candidates: [],
+    offers: [],
+    offer_history: [],
+    payouts: [],
+  });
+  const [customerPaymentInputs, setCustomerPaymentInputs] = useState<Record<string, CustomerPaymentInput>>({});
   const [payoutDetails, setPayoutDetails] = useState<Record<string, { method: string; reference: string }>>({});
+  const [driverHireOfferInputs, setDriverHireOfferInputs] = useState<Record<string, DriverHireOfferInput>>({});
+  const [driverHirePayoutInputs, setDriverHirePayoutInputs] = useState<Record<string, DriverHirePayoutInput>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [receiptWhatsAppUrl, setReceiptWhatsAppUrl] = useState('');
   const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
   const [refunds, setRefunds] = useState<Record<string, { amount: string; reason: string }>>({});
   const [busy, setBusy] = useState('');
@@ -72,14 +178,16 @@ export default function PaymentsPage() {
           claims: Claim[];
           payments: Payment[];
           settlements: Settlement[];
-          settlement_candidates: SettlementCandidate[];
+          customer_payment_candidates: CustomerPaymentCandidate[];
+          driver_hire: DriverHireFinance;
         };
       };
       if (!response.ok || !result.success || !result.data) throw new Error(result.error || 'Finance data could not be loaded.');
       setClaims(result.data.claims);
       setPayments(result.data.payments);
       setSettlements(result.data.settlements);
-      setSettlementCandidates(result.data.settlement_candidates);
+      setCustomerPaymentCandidates(result.data.customer_payment_candidates);
+      setDriverHireFinance(result.data.driver_hire);
       setError('');
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Finance data could not be loaded.');
@@ -90,15 +198,80 @@ export default function PaymentsPage() {
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
-  async function submit(body: Record<string, unknown>): Promise<{ created?: boolean }> {
+  const visibleCandidates = bookingFilter
+    ? customerPaymentCandidates.filter((candidate) => candidate.booking_id === bookingFilter)
+    : customerPaymentCandidates;
+  const visibleClaims = claims.filter((claim) =>
+    (!bookingFilter || claim.booking_id === bookingFilter) && claim.claim_status === 'submitted'
+  );
+  const visiblePayments = bookingFilter
+    ? payments.filter((payment) => payment.booking_id === bookingFilter)
+    : payments;
+
+  async function submit(body: Record<string, unknown>): Promise<{ created?: boolean; data?: Record<string, unknown> }> {
     const response = await fetch('/api/admin/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const result = await response.json() as { success?: boolean; error?: string; created?: boolean };
+    const result = await response.json() as { success?: boolean; error?: string; created?: boolean; data?: Record<string, unknown> };
     if (!response.ok || !result.success) throw new Error(result.error || 'Finance operation failed.');
-    return { created: result.created };
+    return { created: result.created, data: result.data };
+  }
+
+  function updateCustomerPayment(quoteId: string, field: keyof CustomerPaymentInput, value: string) {
+    setCustomerPaymentInputs((currentInputs) => {
+      const current = currentInputs[quoteId] ?? EMPTY_CUSTOMER_PAYMENT;
+      return {
+        ...currentInputs,
+        [quoteId]: { ...current, [field]: value, request_id: '' },
+      };
+    });
+  }
+
+  async function recordCustomerPayment(candidate: CustomerPaymentCandidate) {
+    const input = customerPaymentInputs[candidate.quote_id] ?? EMPTY_CUSTOMER_PAYMENT;
+    if (!window.confirm(
+      `Record ${candidate.currency} ${input.amount} payment for ${candidate.booking_ref} on ${input.payment_date}?`
+    )) return;
+    const requestId = input.request_id || crypto.randomUUID();
+    const stableInput = { ...input, request_id: requestId };
+    setCustomerPaymentInputs((currentInputs) => ({ ...currentInputs, [candidate.quote_id]: stableInput }));
+    setBusy(candidate.quote_id);
+    setNotice('');
+    setReceiptWhatsAppUrl('');
+    try {
+      const result = await submit({
+        action: 'record_customer_payment',
+        booking_id: candidate.booking_id,
+        quote_id: candidate.quote_id,
+        amount: input.amount,
+        method: input.method,
+        payment_date: input.payment_date,
+        reference: input.reference,
+        request_id: requestId,
+      });
+      const receiptNumber = typeof result.data?.receipt_number === 'string'
+        ? result.data.receipt_number
+        : '';
+      if (!receiptNumber) throw new Error('The payment was recorded but its receipt number could not be verified.');
+      setCustomerPaymentInputs((currentInputs) => ({
+        ...currentInputs,
+        [candidate.quote_id]: EMPTY_CUSTOMER_PAYMENT,
+      }));
+      setNotice(result.data?.created === false
+        ? `Payment already recorded as receipt ${receiptNumber}.`
+        : `Payment recorded as receipt ${receiptNumber}.`);
+      setReceiptWhatsAppUrl(whatsAppLink(
+        candidate.customer_phone,
+        `Hello ${candidate.customer_name}, your payment of ${candidate.currency} ${Number(input.amount).toFixed(2)} for booking ${candidate.booking_ref} has been recorded. Receipt number: ${receiptNumber}.`
+      ) ?? '');
+      await load();
+    } catch (actionError) {
+      setNotice(actionError instanceof Error ? actionError.message : 'Customer payment could not be recorded.');
+    } finally {
+      setBusy('');
+    }
   }
 
   async function reviewClaim(claimId: string, approve: boolean) {
@@ -130,26 +303,6 @@ export default function PaymentsPage() {
     }
   }
 
-  async function createSettlement(candidate: SettlementCandidate) {
-    setBusy(candidate.assignment_id);
-    setNotice('');
-    try {
-      const result = await submit({
-        action: 'create_settlement',
-        assignment_id: candidate.assignment_id,
-        amount: settlementAmounts[candidate.assignment_id] ?? '',
-      });
-      setNotice(result.created === false
-        ? `A matching pending settlement already exists for ${candidate.booking_ref}.`
-        : `Pending settlement created for ${candidate.booking_ref}.`);
-      await load();
-    } catch (actionError) {
-      setNotice(actionError instanceof Error ? actionError.message : 'Settlement creation failed.');
-    } finally {
-      setBusy('');
-    }
-  }
-
   async function paySettlement(settlementId: string) {
     const payout = payoutDetails[settlementId] ?? { method: 'bank_transfer', reference: '' };
     setBusy(settlementId);
@@ -170,6 +323,96 @@ export default function PaymentsPage() {
     }
   }
 
+  function updateDriverHireOffer(assignmentId: string, field: keyof DriverHireOfferInput, value: string) {
+    setDriverHireOfferInputs((currentInputs) => {
+      const current = currentInputs[assignmentId] ?? EMPTY_DRIVER_HIRE_OFFER;
+      return {
+        ...currentInputs,
+        [assignmentId]: { ...current, [field]: value, request_id: '' },
+      };
+    });
+  }
+
+  async function issueDriverHireOffer(candidate: DriverHireCandidate) {
+    const input = driverHireOfferInputs[candidate.assignment_id] ?? EMPTY_DRIVER_HIRE_OFFER;
+    if (!input.amount) return;
+    if (!window.confirm(
+      `${candidate.current_offer_id ? 'Revise' : 'Issue'} ${input.currency} ${input.amount} hire offer for ${candidate.booking_ref}? The driver must accept it before payout.`
+    )) return;
+    const requestId = input.request_id || crypto.randomUUID();
+    const stableInput = { ...input, request_id: requestId };
+    setDriverHireOfferInputs((currentInputs) => ({ ...currentInputs, [candidate.assignment_id]: stableInput }));
+    setBusy(candidate.assignment_id);
+    setNotice('');
+    try {
+      const result = await submit({
+        action: 'create_driver_hire_offer',
+        assignment_id: candidate.assignment_id,
+        amount: input.amount,
+        currency: input.currency,
+        request_id: requestId,
+      });
+      setDriverHireOfferInputs((currentInputs) => ({
+        ...currentInputs,
+        [candidate.assignment_id]: EMPTY_DRIVER_HIRE_OFFER,
+      }));
+      setNotice(result.created === false
+        ? `That hire offer request is already recorded for ${candidate.booking_ref}.`
+        : `Hire offer issued for ${candidate.booking_ref}.`);
+      await load();
+    } catch (actionError) {
+      setNotice(actionError instanceof Error ? actionError.message : 'Driver hire offer could not be issued.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function updateDriverHirePayout(assignmentId: string, field: keyof DriverHirePayoutInput, value: string) {
+    setDriverHirePayoutInputs((currentInputs) => {
+      const current = currentInputs[assignmentId] ?? EMPTY_DRIVER_HIRE_PAYOUT;
+      return {
+        ...currentInputs,
+        [assignmentId]: { ...current, [field]: value, request_id: '' },
+      };
+    });
+  }
+
+  async function recordDriverHirePayout(offer: DriverHireOffer) {
+    const input = driverHirePayoutInputs[offer.assignment_id] ?? EMPTY_DRIVER_HIRE_PAYOUT;
+    if (!input.amount || !input.payment_date || offer.outstanding === null) return;
+    if (!window.confirm(
+      `Record ${offer.currency} ${input.amount} payout for ${offer.booking_ref}? Outstanding balance: ${offer.currency} ${Number(offer.outstanding).toFixed(2)}.`
+    )) return;
+    const requestId = input.request_id || crypto.randomUUID();
+    const stableInput = { ...input, request_id: requestId };
+    setDriverHirePayoutInputs((currentInputs) => ({ ...currentInputs, [offer.assignment_id]: stableInput }));
+    setBusy(offer.assignment_id);
+    setNotice('');
+    try {
+      const result = await submit({
+        action: 'record_driver_hire_payout',
+        assignment_id: offer.assignment_id,
+        amount: input.amount,
+        payment_date: input.payment_date,
+        method: input.method,
+        reference: input.reference,
+        request_id: requestId,
+      });
+      setDriverHirePayoutInputs((currentInputs) => ({
+        ...currentInputs,
+        [offer.assignment_id]: EMPTY_DRIVER_HIRE_PAYOUT,
+      }));
+      setNotice(result.created === false
+        ? `This payout was already recorded for ${offer.booking_ref}.`
+        : `Driver payout recorded for ${offer.booking_ref}.`);
+      await load();
+    } catch (actionError) {
+      setNotice(actionError instanceof Error ? actionError.message : 'Driver payout could not be recorded.');
+    } finally {
+      setBusy('');
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -177,18 +420,110 @@ export default function PaymentsPage() {
           <div>
             <Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-blue-700"><ArrowLeft className="h-4 w-4" />Operations</Link>
             <h1 className="mt-2 text-2xl font-black text-slate-900">Payments & refunds</h1>
-            <p className="text-sm text-slate-500">Only Admin and Super Admin can verify claims or add immutable refund entries.</p>
+            <p className="text-sm text-slate-500">Admin and Super Admin only. Customer receipts are immutable, individually numbered ledger entries.</p>
           </div>
           <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white"><RefreshCw className="h-4 w-4" />Refresh</button>
         </header>
+        {bookingFilter && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            <span>Showing payment activity for booking <b>{bookingRefFilter || bookingFilter}</b>.</span>
+            <Link href="/admin/payments" className="font-bold underline">View all finance</Link>
+          </div>
+        )}
         {error && <p className="rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
-        {notice && <p className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900" aria-live="polite">{notice}</p>}
+        {notice && (
+          <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900" aria-live="polite">
+            {notice}
+            {receiptWhatsAppUrl && (
+              <p className="mt-2">
+                <a href={receiptWhatsAppUrl} target="_blank" rel="noopener noreferrer" className="font-bold underline">
+                  Prepare WhatsApp payment confirmation
+                </a>
+              </p>
+            )}
+          </div>
+        )}
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-5">
+            <h2 className="font-extrabold">Record customer payment</h2>
+            <p className="mt-1 text-xs text-slate-500">Payments are recorded against the accepted quote, capped at its remaining balance, and assigned a unique receipt number.</p>
+          </div>
+          {visibleCandidates.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">No accepted bookings have an outstanding balance.</p>
+          ) : visibleCandidates.map((candidate) => {
+            const input = customerPaymentInputs[candidate.quote_id] ?? EMPTY_CUSTOMER_PAYMENT;
+            return (
+              <article key={candidate.quote_id} className="space-y-3 border-b border-slate-100 p-5">
+                <div>
+                  <b>{candidate.booking_ref}</b> · {candidate.customer_name}
+                  <p className="text-xs text-slate-500">
+                    {candidate.currency} {Number(candidate.amount_paid).toFixed(2)} paid ·
+                    {' '}{candidate.currency} {Number(candidate.balance).toFixed(2)} outstanding
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Amount ({candidate.currency})
+                    <input
+                      value={input.amount}
+                      onChange={(event) => updateCustomerPayment(candidate.quote_id, 'amount', event.target.value)}
+                      inputMode="decimal"
+                      pattern="[0-9]+([.][0-9]{1,2})?"
+                      required
+                      placeholder="0.00"
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Method
+                    <select
+                      value={input.method}
+                      onChange={(event) => updateCustomerPayment(candidate.quote_id, 'method', event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="bank_transfer">Bank transfer</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Payment date
+                    <input
+                      type="date"
+                      value={input.payment_date}
+                      onChange={(event) => updateCustomerPayment(candidate.quote_id, 'payment_date', event.target.value)}
+                      required
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Reference (optional)
+                    <input
+                      value={input.reference}
+                      onChange={(event) => updateCustomerPayment(candidate.quote_id, 'reference', event.target.value)}
+                      maxLength={160}
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy === candidate.quote_id || !input.amount || !input.payment_date}
+                    onClick={() => void recordCustomerPayment(candidate)}
+                    className="self-end rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {busy === candidate.quote_id ? 'Recording…' : 'Record payment'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="p-5 border-b border-slate-100"><h2 className="font-extrabold">Submitted claims</h2></div>
-          {loading ? <p className="p-6 text-sm text-slate-500">Loading…</p> : claims.filter((claim) => claim.claim_status === 'submitted').length === 0 ? (
+          {loading ? <p className="p-6 text-sm text-slate-500">Loading…</p> : visibleClaims.length === 0 ? (
             <p className="p-6 text-sm text-slate-500">No submitted claims need review.</p>
-          ) : claims.filter((claim) => claim.claim_status === 'submitted').map((claim) => (
+          ) : visibleClaims.map((claim) => (
             <article key={claim.id} className="p-5 border-b border-slate-100 space-y-3">
               <div className="flex flex-wrap justify-between gap-2">
                 <div><b>{claim.booking_ref}</b> · {claim.customer_name}<p className="text-xs text-slate-500">{claim.method.replaceAll('_', ' ')} · {claim.currency} {Number(claim.amount).toFixed(2)} · {new Date(claim.submitted_at).toLocaleString()}</p></div>
@@ -205,11 +540,16 @@ export default function PaymentsPage() {
 
         <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="p-5 border-b border-slate-100"><h2 className="font-extrabold">Verified payment ledger</h2></div>
-          {payments.length === 0 ? <p className="p-6 text-sm text-slate-500">No verified ledger entries.</p> : payments.map((payment) => (
+          {visiblePayments.length === 0 ? <p className="p-6 text-sm text-slate-500">No verified ledger entries.</p> : visiblePayments.map((payment) => (
             <article key={payment.id} className="p-5 border-b border-slate-100 space-y-3">
               <div className="flex flex-wrap justify-between gap-2 text-sm">
-                <div><b>{payment.booking_ref}</b> · {payment.entry_type} · {payment.currency} {Number(payment.amount).toFixed(2)} · {payment.method.replaceAll('_', ' ')}</div>
-                <span className="text-xs text-slate-500">{new Date(payment.verified_at).toLocaleString()}</span>
+                <div>
+                  <b>{payment.booking_ref}</b> · {payment.entry_type} · {payment.currency} {Number(payment.amount).toFixed(2)} · {payment.method.replaceAll('_', ' ')}
+                  {payment.receipt_number && <p className="mt-1 text-xs text-slate-500">Receipt {payment.receipt_number}</p>}
+                </div>
+                <span className="text-xs text-slate-500">
+                  {payment.payment_date || new Date(payment.verified_at).toLocaleDateString()}
+                </span>
               </div>
               {payment.entry_type === 'receipt' && (
                 <div className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
@@ -225,39 +565,192 @@ export default function PaymentsPage() {
 
         <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="p-5 border-b border-slate-100">
-            <h2 className="font-extrabold">Completed trips ready for settlement</h2>
-            <p className="mt-1 text-xs text-slate-500">Enter the driver’s earnings amount in the accepted quote currency. It cannot exceed the quote total.</p>
+            <h2 className="font-extrabold">Driver hire offers</h2>
+            <p className="mt-1 text-xs text-slate-500">Issue or revise an agreed hire amount in LKR or USD. Every revision is retained and requires the driver’s acceptance before any payout.</p>
           </div>
-          {settlementCandidates.length === 0 ? (
-            <p className="p-6 text-sm text-slate-500">No completed assignments need a settlement.</p>
-          ) : settlementCandidates.map((candidate) => (
-            <article key={candidate.assignment_id} className="grid gap-3 border-b border-slate-100 p-5 sm:grid-cols-[1fr_12rem_auto] sm:items-center">
+          {driverHireFinance.candidates.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">No active driver assignments are available.</p>
+          ) : driverHireFinance.candidates.map((candidate) => {
+            const input = driverHireOfferInputs[candidate.assignment_id] ?? {
+              ...EMPTY_DRIVER_HIRE_OFFER,
+              amount: candidate.current_amount === null ? '' : String(candidate.current_amount),
+              currency: candidate.current_currency ?? 'LKR',
+            };
+            return (
+              <article key={candidate.assignment_id} className="space-y-3 border-b border-slate-100 p-5">
+                <div>
+                  <b>{candidate.booking_ref}</b> · {candidate.driver_name}
+                  <p className="text-xs text-slate-500">
+                    Assignment {candidate.assignment_status.replaceAll('_', ' ')}
+                    {candidate.current_offer_status && ` · current offer ${candidate.current_offer_status}`}
+                    {candidate.current_amount !== null && candidate.current_currency &&
+                      ` · ${candidate.current_currency} ${Number(candidate.current_amount).toFixed(2)}`}
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Hire amount
+                    <input
+                      value={input.amount}
+                      onChange={(event) => updateDriverHireOffer(candidate.assignment_id, 'amount', event.target.value)}
+                      inputMode="decimal"
+                      pattern="[0-9]+([.][0-9]{1,2})?"
+                      placeholder="0.00"
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Currency
+                    <select
+                      value={input.currency}
+                      onChange={(event) => updateDriverHireOffer(candidate.assignment_id, 'currency', event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                    >
+                      <option value="LKR">LKR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy === candidate.assignment_id || !input.amount}
+                    onClick={() => void issueDriverHireOffer(candidate)}
+                    className="self-end rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {candidate.current_offer_id ? 'Issue revised offer' : 'Issue hire offer'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-5">
+            <h2 className="font-extrabold">Agreed driver hire and outstanding balance</h2>
+            <p className="mt-1 text-xs text-slate-500">Payouts are separate immutable entries. The database enforces the accepted currency and remaining balance.</p>
+          </div>
+          {driverHireFinance.offers.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">No driver hire offers have been issued.</p>
+          ) : driverHireFinance.offers.map((offer) => {
+            const input = driverHirePayoutInputs[offer.assignment_id] ?? EMPTY_DRIVER_HIRE_PAYOUT;
+            return (
+              <article key={offer.id} className="space-y-3 border-b border-slate-100 p-5">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <div>
+                    <b>{offer.booking_ref}</b> · {offer.driver_name}
+                    <p className="text-xs text-slate-500">
+                      Revision {offer.revision} · {offer.offer_status} · {offer.currency} {Number(offer.amount).toFixed(2)}
+                    </p>
+                  </div>
+                  {offer.offer_status === 'accepted' && (
+                    <div className="text-right text-xs">
+                      <p>{offer.currency} {Number(offer.paid_total).toFixed(2)} paid</p>
+                      <p className="font-bold">{offer.currency} {Number(offer.outstanding ?? 0).toFixed(2)} outstanding</p>
+                    </div>
+                  )}
+                </div>
+                {offer.offer_status === 'accepted' && Number(offer.outstanding) > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-[1fr_10rem_10rem_1fr_auto]">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Payout amount ({offer.currency})
+                      <input
+                        value={input.amount}
+                        onChange={(event) => updateDriverHirePayout(offer.assignment_id, 'amount', event.target.value)}
+                        inputMode="decimal"
+                        pattern="[0-9]+([.][0-9]{1,2})?"
+                        placeholder="0.00"
+                        className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Payment date
+                      <input
+                        type="date"
+                        value={input.payment_date}
+                        onChange={(event) => updateDriverHirePayout(offer.assignment_id, 'payment_date', event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Method
+                      <select
+                        value={input.method}
+                        onChange={(event) => updateDriverHirePayout(offer.assignment_id, 'method', event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                      >
+                        <option value="bank_transfer">Bank transfer</option>
+                        <option value="cash">Cash</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Reference (optional)
+                      <input
+                        value={input.reference}
+                        onChange={(event) => updateDriverHirePayout(offer.assignment_id, 'reference', event.target.value)}
+                        maxLength={160}
+                        className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busy === offer.assignment_id || !input.amount || !input.payment_date}
+                      onClick={() => void recordDriverHirePayout(offer)}
+                      className="self-end rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                      Record payout
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-5">
+            <h2 className="font-extrabold">Driver payout history</h2>
+          </div>
+          {driverHireFinance.payouts.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">No partial driver payouts have been recorded.</p>
+          ) : driverHireFinance.payouts.map((payout) => (
+            <article key={payout.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 p-5 text-sm">
               <div>
-                <b>{candidate.booking_ref}</b>
-                <p className="text-xs text-slate-500">{candidate.driver_name} · quote limit {candidate.currency} {Number(candidate.quote_total).toFixed(2)}</p>
+                <b>{payout.booking_ref}</b> · {payout.driver_name}
+                <p className="text-xs text-slate-500">
+                  {payout.payment_date} · {payout.payment_method.replaceAll('_', ' ')}
+                  {payout.payment_reference && ` · ${payout.payment_reference}`}
+                </p>
               </div>
-              <input
-                value={settlementAmounts[candidate.assignment_id] ?? ''}
-                onChange={(event) => setSettlementAmounts({ ...settlementAmounts, [candidate.assignment_id]: event.target.value })}
-                placeholder="Driver earnings"
-                inputMode="decimal"
-                pattern="[0-9]+([.][0-9]{1,2})?"
-                aria-label={`Settlement amount for ${candidate.booking_ref}`}
-                className="rounded-xl border border-slate-200 p-2.5 text-sm"
-              />
-              <button
-                disabled={busy === candidate.assignment_id}
-                onClick={() => void createSettlement(candidate)}
-                className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
-              >
-                Create settlement
-              </button>
+              <span className="font-bold">{payout.currency} {Number(payout.amount).toFixed(2)}</span>
+            </article>
+          ))}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 p-5">
+            <h2 className="font-extrabold">Driver hire offer revision history</h2>
+          </div>
+          {driverHireFinance.offer_history.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">No offer revisions have been recorded.</p>
+          ) : driverHireFinance.offer_history.map((offer) => (
+            <article key={offer.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 p-5 text-sm">
+              <div>
+                <b>{offer.booking_ref}</b> · {offer.driver_name}
+                <p className="text-xs text-slate-500">
+                  Revision {offer.revision} · {offer.offer_status}{offer.is_current ? ' · current' : ' · superseded'}
+                  {offer.responded_at && ` · responded ${new Date(offer.responded_at).toLocaleString()}`}
+                </p>
+              </div>
+              <span className="font-bold">{offer.currency} {Number(offer.amount).toFixed(2)}</span>
             </article>
           ))}
         </section>
 
         <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100"><h2 className="font-extrabold">Driver settlement ledger</h2></div>
+          <div className="p-5 border-b border-slate-100">
+            <h2 className="font-extrabold">Legacy one-time driver settlements</h2>
+            <p className="mt-1 text-xs text-slate-500">Historical settlement records are kept separate from the current hire-offer and partial-payout ledger.</p>
+          </div>
           {settlements.length === 0 ? (
             <p className="p-6 text-sm text-slate-500">No driver settlements have been recorded.</p>
           ) : settlements.map((settlement) => {
@@ -309,5 +802,13 @@ export default function PaymentsPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function PaymentsPage() {
+  return (
+    <Suspense fallback={<main className="p-6 text-sm text-slate-500">Loading payments…</main>}>
+      <PaymentsPageContent />
+    </Suspense>
   );
 }

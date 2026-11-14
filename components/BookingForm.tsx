@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
 interface BookingFormProps {
   isOpen?: boolean;
   onClose?: () => void;
-  onSuccess?: (bookingReference: string) => void;
+  onSuccess?: (bookingReference: string, trackerUrl?: string) => void;
   initialValues?: Partial<BookingFormInitialValues>;
   submitLabel?: string;
   heading?: string;
@@ -59,6 +59,7 @@ type BookingResponse = {
   data?: {
     id?: string | null;
     booking_ref?: string | null;
+    tracker_token?: string | null;
   };
 };
 
@@ -150,6 +151,7 @@ export default function BookingForm({
   const [formData, setFormData] = useState(() => createInitialFormData(initialValues));
   const [bookingReference, setBookingReference] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [trackerUrl, setTrackerUrl] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const idempotencyRef = useRef<IdempotencyEntry | null>(null);
 
@@ -182,6 +184,7 @@ export default function BookingForm({
     setMessage(null);
     setBookingReference(null);
     setBookingId(null);
+    setTrackerUrl(null);
     setFieldErrors((current) => {
       const next = { ...current };
       delete next[name];
@@ -210,6 +213,7 @@ export default function BookingForm({
     setMessage(null);
     setBookingReference(null);
     setBookingId(null);
+    setTrackerUrl(null);
     setFieldErrors((current) => {
       const next = { ...current };
       delete next[`legs.${index}.${field}`];
@@ -277,6 +281,7 @@ export default function BookingForm({
     setMessage(null);
     setBookingReference(null);
     setBookingId(null);
+    setTrackerUrl(null);
 
     try {
       const payload = {
@@ -334,14 +339,21 @@ export default function BookingForm({
         typeof result.data?.id !== 'string' ||
         !result.data.id ||
         typeof result.data.booking_ref !== 'string' ||
-        !result.data.booking_ref
+        !result.data.booking_ref ||
+        (result.data.tracker_token !== undefined &&
+          result.data.tracker_token !== null &&
+          !/^[0-9a-f]{64}$/i.test(result.data.tracker_token))
       ) {
         throw new Error(result.error || 'Booking එක යැවීමේදී දෝෂයක් සිදු විය.');
       }
 
       const reference = result.data.booking_ref;
+      const newTrackerUrl = result.data.tracker_token
+        ? `${window.location.origin}/track#${result.data.tracker_token}`
+        : null;
       setBookingId(result.data.id);
       setBookingReference(reference);
+      setTrackerUrl(newTrackerUrl);
       try {
         const stored = sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
         const parsed = stored ? JSON.parse(stored) as Partial<IdempotencyEntry> : null;
@@ -353,7 +365,7 @@ export default function BookingForm({
 
       if (onSuccess) {
         try {
-          onSuccess(reference);
+          onSuccess(reference, newTrackerUrl ?? undefined);
         } catch (callbackError) {
           console.error('Booking was saved, but the post-booking view could not be updated.', callbackError);
         }
@@ -395,6 +407,15 @@ export default function BookingForm({
         </h2>
         <p className="mt-2 text-sm text-slate-600">Your booking request has been saved.</p>
         <p className="mt-4 text-lg font-extrabold text-slate-900">Booking reference: {bookingReference}</p>
+        {trackerUrl && (
+          <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left">
+            <p className="text-sm font-bold text-blue-950">Save your private booking tracker link</p>
+            <p className="mt-1 text-xs leading-5 text-blue-900">This link provides access to this booking and expires after one year. Keep it private; it is required to view or link the guest booking to an account.</p>
+            <a href={trackerUrl} className="mt-3 inline-flex rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white" rel="noreferrer">
+              Open booking tracker
+            </a>
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <a
             href={`https://wa.me/94711114901?text=${encodeURIComponent(`Hello Chama Travels, my booking request has been saved. Booking reference: ${bookingReference}.`)}`}

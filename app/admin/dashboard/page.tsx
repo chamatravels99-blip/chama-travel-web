@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Car, Clipboard, RefreshCw, Search, ShieldCheck, UserPlus } from 'lucide-react';
+import { Activity, Car, CheckCircle, Clipboard, Clock, MapPin, RefreshCw, Search, ShieldCheck, UserPlus } from 'lucide-react';
 
 type Leg = {
   sequence_no: number;
@@ -49,6 +49,47 @@ type Booking = {
 type Driver = { id: string; full_name: string; phone: string | null };
 type Vehicle = { id: string; display_name: string; category_name: string };
 type ApiResult = { success?: boolean; error?: string; data?: Record<string, unknown> };
+type QueueFilter =
+  | 'review'
+  | 'quote'
+  | 'customer'
+  | 'dispatch'
+  | 'driver'
+  | 'upcoming'
+  | 'in_progress'
+  | 'completed'
+  | 'overdue_quote';
+
+function matchesQueue(booking: Booking, filter: QueueFilter, now: number) {
+  const latestQuote = booking.quotes[0];
+  switch (filter) {
+    case 'review':
+      return ['pending', 'reviewing'].includes(booking.booking_status);
+    case 'quote':
+      return ['pending', 'reviewing'].includes(booking.booking_status) &&
+        !booking.quotes.some((quote) => quote.quote_status === 'sent');
+    case 'customer':
+      return booking.booking_status === 'quoted' && latestQuote?.quote_status === 'sent';
+    case 'dispatch':
+      return booking.booking_status === 'confirmed' && !booking.assignment;
+    case 'driver':
+      return booking.assignment?.assignment_status === 'offered';
+    case 'upcoming':
+      return booking.assignment?.assignment_status === 'accepted' &&
+        booking.legs.some((leg) => {
+          const pickupAt = Date.parse(leg.pickup_at);
+          return Number.isFinite(pickupAt) && pickupAt >= now;
+        });
+    case 'in_progress':
+      return booking.booking_status === 'in_progress';
+    case 'completed':
+      return booking.booking_status === 'completed';
+    case 'overdue_quote':
+      return booking.booking_status === 'quoted' &&
+        latestQuote?.quote_status === 'sent' &&
+        Date.parse(latestQuote.expires_at) <= now;
+  }
+}
 
 function quoteExpiryAfter48Hours() {
   return new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -78,7 +119,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [now, setNow] = useState(0);
   const [query, setQuery] = useState('');
+  const [queueFilter, setQueueFilter] = useState<QueueFilter | ''>('');
   const [assignments, setAssignments] = useState<Record<string, { driver: string; vehicle: string }>>({});
   const [acceptanceUrl, setAcceptanceUrl] = useState('');
   const [showDriverForm, setShowDriverForm] = useState(false);
@@ -99,6 +142,7 @@ export default function AdminDashboard() {
       setDrivers(result.data.resources.drivers);
       setVehicles(result.data.resources.vehicles);
       setRoles(result.roles ?? []);
+      setNow(Date.now());
       setError('');
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Operations data could not be loaded.');
@@ -112,16 +156,17 @@ export default function AdminDashboard() {
   const isAdmin = roles.includes('admin') || roles.includes('super_admin');
   const filteredBookings = useMemo(() => {
     const search = query.trim().toLowerCase();
-    if (!search) return bookings;
-    return bookings.filter((booking) =>
-      [
+    return bookings.filter((booking) => {
+      const matchesSearch = !search || [
         booking.booking_ref,
         booking.customer_name,
+        booking.customer_email,
         booking.customer_phone,
         ...booking.legs.flatMap((leg) => [leg.pickup_location, leg.dropoff_location]),
-      ].some((value) => value.toLowerCase().includes(search))
-    );
-  }, [bookings, query]);
+      ].some((value) => value.toLowerCase().includes(search));
+      return matchesSearch && (!queueFilter || matchesQueue(booking, queueFilter, now));
+    });
+  }, [bookings, now, query, queueFilter]);
 
   async function postOperation(body: Record<string, unknown>) {
     const response = await fetch('/api/operations/bookings', {
@@ -222,6 +267,7 @@ export default function AdminDashboard() {
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && <>
               <Link href="/admin/payments" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Payments</Link>
+              <Link href="/admin/reports/financial" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Financial reports</Link>
               <Link href="/admin/fleet" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Fleet</Link>
               <Link href="/admin/pricing" className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Pricing</Link>
               <button type="button" onClick={() => setShowDriverForm((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
@@ -258,22 +304,35 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <section aria-label="Booking summary" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { label: 'All bookings', count: bookings.length, icon: Clipboard, color: 'bg-blue-50 text-blue-700' },
-            { label: 'Needs review', count: bookings.filter((booking) => ['pending', 'reviewing'].includes(booking.booking_status)).length, icon: Activity, color: 'bg-amber-50 text-amber-700' },
-            { label: 'Awaiting acceptance', count: bookings.filter((booking) => booking.booking_status === 'quoted').length, icon: Search, color: 'bg-slate-100 text-slate-700' },
-            { label: 'Confirmed / dispatch', count: bookings.filter((booking) => booking.booking_status === 'confirmed').length, icon: Car, color: 'bg-emerald-50 text-emerald-700' },
-          ].map(({ label, count, icon: Icon, color }) => (
-            <div key={label} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+        <section aria-label="Booking work queues" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {([
+            { id: 'review', label: 'New bookings to review', icon: Clipboard, color: 'bg-amber-50 text-amber-700' },
+            { id: 'quote', label: 'Bookings awaiting a quote', icon: Search, color: 'bg-blue-50 text-blue-700' },
+            { id: 'customer', label: 'Quotes awaiting customer', icon: Activity, color: 'bg-blue-50 text-blue-700' },
+            { id: 'dispatch', label: 'Confirmed, awaiting driver', icon: Car, color: 'bg-emerald-50 text-emerald-700' },
+            { id: 'driver', label: 'Driver invitations awaiting response', icon: Car, color: 'bg-amber-50 text-amber-700' },
+            { id: 'upcoming', label: 'Upcoming accepted trips', icon: Activity, color: 'bg-blue-50 text-blue-700' },
+            { id: 'overdue_quote', label: 'Quotes past expiry', icon: Clock, color: 'bg-rose-50 text-rose-700' },
+            { id: 'in_progress', label: 'Trips in progress', icon: MapPin, color: 'bg-emerald-50 text-emerald-700' },
+            { id: 'completed', label: 'Completed bookings', icon: CheckCircle, color: 'bg-slate-100 text-slate-700' },
+          ] as const).map(({ id, label, icon: Icon, color }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={queueFilter === id}
+              onClick={() => setQueueFilter((current) => current === id ? '' : id)}
+              className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${queueFilter === id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200/80'}`}
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
                 <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}>
                   <Icon className="h-5 w-5" />
                 </span>
               </div>
-              <p className="mt-3 text-3xl font-black tracking-tight text-slate-950">{count}</p>
-            </div>
+              <p className="mt-3 text-3xl font-black tracking-tight text-slate-950">
+                {bookings.filter((booking) => matchesQueue(booking, id, now)).length}
+              </p>
+            </button>
           ))}
         </section>
 
@@ -281,7 +340,11 @@ export default function AdminDashboard() {
           <div className="flex flex-col justify-between gap-4 border-b border-slate-200/80 p-5 sm:flex-row sm:items-center sm:p-6">
             <div>
               <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Bookings</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Driver and vehicle assignments are checked for overlapping schedules in the database.</p>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+                {queueFilter
+                  ? 'Filtered by selected work queue. Select that queue again to clear it.'
+                  : 'Driver and vehicle assignments are checked for overlapping schedules in the database.'}
+              </p>
             </div>
             <label className="relative block w-full sm:max-w-sm">
               <span className="sr-only">Search bookings by reference, customer or route</span>

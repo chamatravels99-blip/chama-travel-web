@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { isAuthSessionMissingError } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase/server';
 import { isSameOriginRequest } from '@/lib/server/authorization';
+import { enforceGuestRateLimit } from '@/lib/server/rate-limit';
+import { createServiceClient } from '@/lib/server/service-client';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const SERVICE_TYPES = new Set([
@@ -299,14 +301,32 @@ export async function POST(request: Request) {
 
     const booking = validateBody(await readJson(request));
     const supabase = await createClient();
-    const { error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
     // Guests have no session; getUser() reports that as AuthSessionMissingError, which is not a failure.
     if (userError && !isAuthSessionMissingError(userError)) {
       console.error('Unable to verify booking session.', userError.code);
       return NextResponse.json({ success: false, error: 'Could not verify your session.' }, { status: 503 });
     }
 
-    const { data, error } = await supabase.rpc('create_booking', {
+    const useServiceBooking = process.env.BOOKING_SERVER_RPC_ENABLED === 'true';
+    const serviceClient = !user || useServiceBooking ? createServiceClient() : null;
+    if (!user) {
+      const limited = await enforceGuestRateLimit(request, 'guest_tracker_issue', booking.idempotencyKey);
+      if (limited) return limited;
+      if (!serviceClient) {
+        return NextResponse.json({ success: false, error: 'This service is temporarily unavailable.' }, { status: 503 });
+      }
+    }
+    const limited = await enforceGuestRateLimit(request, 'booking_submit', user?.id ?? booking.idempotencyKey);
+    if (limited) return limited;
+    if (useServiceBooking && !serviceClient) {
+      return NextResponse.json({ success: false, error: 'This service is temporarily unavailable.' }, { status: 503 });
+    }
+
+    const bookingArgs = {
       p_customer_name: booking.name,
       p_customer_email: booking.email,
       p_customer_phone: booking.phone,
@@ -319,7 +339,28 @@ export async function POST(request: Request) {
       p_requested_currency: booking.currency,
       p_idempotency_key: booking.idempotencyKey,
       p_legs: booking.legs,
-    });
+    };
+    let data;
+    let error;
+    if (useServiceBooking && serviceClient) {
+      const { data: submissionToken, error: tokenError } = await serviceClient.rpc(
+        'issue_booking_submission_token',
+        { p_customer_user_id: user?.id ?? null, p_booking: bookingArgs }
+      );
+      if (tokenError || typeof submissionToken !== 'string' || !/^[0-9a-f]{64}$/.test(submissionToken)) {
+        console.error('Booking submission authorization failed.', tokenError?.code);
+        return NextResponse.json(
+          { success: false, error: 'This service is temporarily unavailable.' },
+          { status: 503, headers: { 'Cache-Control': 'no-store' } }
+        );
+      }
+      ({ data, error } = await supabase.rpc('service_create_booking', {
+        ...bookingArgs,
+        p_submission_token: submissionToken,
+      }));
+    } else {
+      ({ data, error } = await supabase.rpc('create_booking', bookingArgs));
+    }
 
     if (error) {
       if (process.env.NODE_ENV === 'development') {
@@ -366,10 +407,53 @@ export async function POST(request: Request) {
       );
     }
 
+    let trackerToken: string | null = null;
+    if (!user && serviceClient) {
+      const { data: accessData, error: accessError } = await serviceClient.rpc(
+        'issue_guest_booking_tracker_token',
+        {
+          p_booking_id: bookingId,
+          p_idempotency_key: booking.idempotencyKey,
+        }
+      );
+      if (accessError) {
+        console.error('Guest booking tracker link could not be issued.', accessError.code);
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Your booking was saved, but its secure tracking link could not be prepared. Please contact Chama Travels for assistance.',
+          },
+          { status: 503, headers: { 'Cache-Control': 'no-store' } }
+        );
+      }
+      const access = Array.isArray(accessData) ? accessData[0] : accessData;
+      const returnedToken = access && typeof access === 'object' && 'token' in access
+        ? access.token
+        : null;
+      if (typeof returnedToken !== 'string' || !/^[0-9a-f]{64}$/i.test(returnedToken)) {
+        console.error('Guest booking tracker RPC returned an invalid token response.');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Your booking was saved, but its secure tracking link could not be prepared. Submit again to retry safely.',
+          },
+          { status: 503, headers: { 'Cache-Control': 'no-store' } }
+        );
+      }
+      trackerToken = returnedToken;
+    }
+
     console.info('Booking created.', { bookingId });
     return NextResponse.json(
-      { success: true, data: { id: bookingId, booking_ref: bookingRef } },
-      { status: 201 }
+      {
+        success: true,
+        data: {
+          id: bookingId,
+          booking_ref: bookingRef,
+          ...(trackerToken ? { tracker_token: trackerToken } : {}),
+        },
+      },
+      { status: 201, headers: { 'Cache-Control': 'no-store' } }
     );
   } catch (error) {
     if (error instanceof RequestError) {

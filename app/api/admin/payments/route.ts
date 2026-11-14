@@ -1,24 +1,31 @@
 import { NextResponse } from 'next/server';
 import { authorizationResponse, isSameOriginRequest, requireRoles } from '@/lib/server/authorization';
+import { parseAdminCustomerPaymentInput } from '@/lib/admin-customer-payment';
+import {
+  parseAdminDriverHireOfferInput,
+  parseAdminDriverHirePayoutInput,
+} from '@/lib/admin-driver-hire';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET() {
   try {
     const { supabase } = await requireRoles(['admin', 'super_admin']);
-    const [claims, payments, settlements, candidates] = await Promise.all([
+    const [claims, payments, settlements, paymentCandidates, driverHire] = await Promise.all([
       supabase.rpc('list_payment_claims'),
       supabase.rpc('list_financial_records'),
       supabase.rpc('admin_list_driver_settlements'),
-      supabase.rpc('admin_list_settlement_candidates'),
+      supabase.rpc('admin_list_customer_payment_candidates'),
+      supabase.rpc('admin_list_driver_hire_data'),
     ]);
-    if (claims.error || payments.error || settlements.error || candidates.error) {
+    if (claims.error || payments.error || settlements.error || paymentCandidates.error || driverHire.error) {
       console.error(
         'Finance dashboard data failed.',
         claims.error?.code,
         payments.error?.code,
         settlements.error?.code,
-        candidates.error?.code
+        paymentCandidates.error?.code,
+        driverHire.error?.code
       );
       return NextResponse.json({ success: false, error: 'Finance data is temporarily unavailable.' }, { status: 503 });
     }
@@ -28,7 +35,13 @@ export async function GET() {
         claims: claims.data ?? [],
         payments: payments.data ?? [],
         settlements: settlements.data ?? [],
-        settlement_candidates: candidates.data ?? [],
+        customer_payment_candidates: paymentCandidates.data ?? [],
+        driver_hire: driverHire.data ?? {
+          candidates: [],
+          offers: [],
+          offer_history: [],
+          payouts: [],
+        },
       },
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
@@ -52,6 +65,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Finance operation details are invalid.' }, { status: 400 });
     }
     const input = body as Record<string, unknown>;
+
+    if (input.action === 'record_customer_payment') {
+      const paymentInput = parseAdminCustomerPaymentInput(input);
+      if (!paymentInput) {
+        return NextResponse.json({ success: false, error: 'Customer payment details are invalid.' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase.rpc('admin_record_customer_payment', {
+        p_booking_id: paymentInput.bookingId,
+        p_quote_id: paymentInput.quoteId,
+        p_amount: paymentInput.amount,
+        p_method: paymentInput.method,
+        p_payment_date: paymentInput.paymentDate,
+        p_reference: paymentInput.reference || null,
+        p_request_id: paymentInput.requestId,
+      });
+      if (error) {
+        console.error('Customer payment recording failed.', error.code);
+        return NextResponse.json(
+          { success: false, error: 'The payment could not be recorded. Check the accepted quote and remaining balance.' },
+          { status: 409 }
+        );
+      }
+      const payment = Array.isArray(data) ? data[0] : null;
+      if (!payment || typeof payment !== 'object' ||
+          typeof payment.payment_id !== 'string' || typeof payment.receipt_number !== 'string' ||
+          typeof payment.created !== 'boolean') {
+        console.error('Customer payment RPC returned an unexpected response.');
+        return NextResponse.json({ success: false, error: 'The payment result could not be verified.' }, { status: 503 });
+      }
+      return NextResponse.json({
+        success: true,
+        data: {
+          payment_id: payment.payment_id,
+          receipt_number: payment.receipt_number,
+          created: payment.created,
+        },
+      }, { status: payment.created ? 201 : 200 });
+    }
 
     if (input.action === 'review_claim') {
       const claimId = typeof input.claim_id === 'string' ? input.claim_id : '';
@@ -153,6 +205,68 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json({ success: true });
+    }
+
+    if (input.action === 'create_driver_hire_offer') {
+      const offerInput = parseAdminDriverHireOfferInput(input);
+      if (!offerInput) {
+        return NextResponse.json({ success: false, error: 'Driver hire offer details are invalid.' }, { status: 400 });
+      }
+      const { data, error } = await supabase.rpc('admin_create_driver_hire_offer', {
+        p_assignment_id: offerInput.assignmentId,
+        p_amount: offerInput.amount,
+        p_currency: offerInput.currency,
+        p_request_id: offerInput.requestId,
+      });
+      if (error) {
+        console.error('Driver hire offer creation failed.', error.code);
+        return NextResponse.json(
+          { success: false, error: 'The driver hire offer could not be issued. Verify the assignment and remaining payout balance.' },
+          { status: 409 }
+        );
+      }
+      const offer = Array.isArray(data) ? data[0] : null;
+      if (!offer || typeof offer !== 'object' ||
+          typeof offer.offer_id !== 'string' || typeof offer.created !== 'boolean') {
+        console.error('Driver hire offer RPC returned an unexpected response.');
+        return NextResponse.json({ success: false, error: 'The offer result could not be verified.' }, { status: 503 });
+      }
+      return NextResponse.json(
+        { success: true, data: { offer_id: offer.offer_id }, created: offer.created },
+        { status: offer.created ? 201 : 200 }
+      );
+    }
+
+    if (input.action === 'record_driver_hire_payout') {
+      const payoutInput = parseAdminDriverHirePayoutInput(input);
+      if (!payoutInput) {
+        return NextResponse.json({ success: false, error: 'Driver payout details are invalid.' }, { status: 400 });
+      }
+      const { data, error } = await supabase.rpc('admin_record_driver_hire_payout', {
+        p_assignment_id: payoutInput.assignmentId,
+        p_amount: payoutInput.amount,
+        p_payment_date: payoutInput.paymentDate,
+        p_payment_method: payoutInput.method,
+        p_payment_reference: payoutInput.reference || null,
+        p_request_id: payoutInput.requestId,
+      });
+      if (error) {
+        console.error('Driver hire payout recording failed.', error.code);
+        return NextResponse.json(
+          { success: false, error: 'The payout could not be recorded. Verify the accepted hire offer and outstanding balance.' },
+          { status: 409 }
+        );
+      }
+      const payout = Array.isArray(data) ? data[0] : null;
+      if (!payout || typeof payout !== 'object' ||
+          typeof payout.payout_id !== 'string' || typeof payout.created !== 'boolean') {
+        console.error('Driver hire payout RPC returned an unexpected response.');
+        return NextResponse.json({ success: false, error: 'The payout result could not be verified.' }, { status: 503 });
+      }
+      return NextResponse.json(
+        { success: true, data: { payout_id: payout.payout_id }, created: payout.created },
+        { status: payout.created ? 201 : 200 }
+      );
     }
 
     return NextResponse.json({ success: false, error: 'Unsupported finance operation.' }, { status: 400 });

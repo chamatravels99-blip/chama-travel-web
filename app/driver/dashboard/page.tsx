@@ -42,6 +42,31 @@ type Settlement = {
   created_at: string;
   paid_at: string | null;
 };
+type DriverHireOffer = {
+  id: string;
+  assignment_id: string;
+  booking_ref: string;
+  revision: number;
+  amount: number;
+  currency: string;
+  offer_status: 'offered' | 'accepted' | 'declined';
+  is_current: boolean;
+  created_at: string;
+  responded_at: string | null;
+  paid_total: number;
+  outstanding: number | null;
+};
+type DriverHirePayout = {
+  id: string;
+  assignment_id: string;
+  booking_ref: string;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  payment_method: string;
+  payment_reference: string | null;
+  recorded_at: string;
+};
 
 function colomboDate(value: string) {
   return new Date(value).toLocaleString('en-GB', {
@@ -71,6 +96,9 @@ export default function DriverDashboard() {
   const router = useRouter();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [hireOffers, setHireOffers] = useState<DriverHireOffer[]>([]);
+  const [hirePayouts, setHirePayouts] = useState<DriverHirePayout[]>([]);
+  const [onTheWay, setOnTheWay] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -84,12 +112,18 @@ export default function DriverDashboard() {
         error?: string;
         data?: Assignment[];
         settlements?: Settlement[];
+        on_the_way?: string[];
+        compensation?: { offers: DriverHireOffer[]; payouts: DriverHirePayout[] };
       };
-      if (!response.ok || !result.success || !result.data || !result.settlements) {
+      if (!response.ok || !result.success || !result.data || !result.settlements || !result.on_the_way ||
+          !result.compensation || !result.compensation.offers || !result.compensation.payouts) {
         throw new Error(result.error || 'Assignments could not be loaded.');
       }
       setAssignments(result.data);
       setSettlements(result.settlements);
+      setOnTheWay(result.on_the_way);
+      setHireOffers(result.compensation.offers);
+      setHirePayouts(result.compensation.payouts);
       setError('');
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Assignments could not be loaded.');
@@ -117,11 +151,31 @@ export default function DriverDashboard() {
           ? 'Assignment declined.'
           : action === 'accept'
             ? 'Assignment accepted.'
-            : 'Trip started.';
+            : action === 'on_the_way' ? 'On the way recorded.' : 'Trip started.';
       setNotice(notice);
       await loadAssignments();
     } catch (actionError) {
       setNotice(actionError instanceof Error ? actionError.message : 'Assignment update failed.');
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function respondHireOffer(offer: DriverHireOffer, accept: boolean) {
+    setSavingId(offer.id);
+    setNotice('');
+    try {
+      const response = await fetch('/api/driver/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'respond_hire_offer', offer_id: offer.id, accept }),
+      });
+      const result = await response.json() as { success?: boolean; error?: string };
+      if (!response.ok || !result.success) throw new Error(result.error || 'Hire offer response failed.');
+      setNotice(accept ? 'Driver hire amount accepted.' : 'Driver hire offer declined.');
+      await loadAssignments();
+    } catch (actionError) {
+      setNotice(actionError instanceof Error ? actionError.message : 'Hire offer response failed.');
     } finally {
       setSavingId('');
     }
@@ -146,7 +200,7 @@ export default function DriverDashboard() {
           <div className="min-w-0">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-800"><Car className="h-4 w-4" /> Driver portal</div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Welcome to your driver dashboard</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Your current and upcoming transfers, trip progress and settlement history.</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">Your current and upcoming transfers, trip progress, agreed hire amounts and payout history.</p>
           </div>
           <button type="button" onClick={() => void loadAssignments()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"><Clock className="h-4 w-4" /> Refresh assignments</button>
         </header>
@@ -226,6 +280,10 @@ export default function DriverDashboard() {
                   <button type="button" disabled={savingId === assignment.id} onClick={() => void updateAssignment(assignment.id, 'decline')} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50">Decline</button>
                   <button type="button" disabled={savingId === assignment.id} onClick={() => void updateAssignment(assignment.id, 'accept')} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-50">Accept assignment</button>
                 </>}
+                {assignment.assignment_status === 'accepted' && !onTheWay.includes(assignment.id) && (
+                  <button type="button" disabled={savingId === assignment.id} onClick={() => void updateAssignment(assignment.id, 'on_the_way')} className="rounded-xl border border-blue-700 px-4 py-2.5 text-xs font-bold text-blue-700 disabled:opacity-50">On the way</button>
+                )}
+                {assignment.assignment_status === 'accepted' && onTheWay.includes(assignment.id) && <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-800">On the way</span>}
                 {assignment.assignment_status === 'accepted' && (
                   <button type="button" disabled={savingId === assignment.id} onClick={() => void updateAssignment(assignment.id, 'start')} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-50">Start trip</button>
                 )}
@@ -240,8 +298,79 @@ export default function DriverDashboard() {
 
         <section className="space-y-4">
           <div>
-            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Earnings and settlements</h2>
-            <p className="mt-1 text-xs text-slate-500">Review recorded payouts and pending settlement status.</p>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Agreed hire and payout history</h2>
+            <p className="mt-1 text-xs text-slate-500">Review and respond to current hire offers. Revised offers require a new response; each partial payout is listed separately.</p>
+          </div>
+          {loading ? (
+            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 text-sm text-slate-500 shadow-sm">Loading hire offers…</div>
+          ) : hireOffers.length === 0 ? (
+            <div className="rounded-3xl border border-slate-200/80 bg-white p-6 text-sm text-slate-600 shadow-sm">No driver hire offers have been issued.</div>
+          ) : hireOffers.map((offer) => (
+            <article key={offer.id} className="space-y-3 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <b className="break-all text-slate-900">{offer.booking_ref}</b>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Revision {offer.revision}{offer.is_current ? ' · current offer' : ' · prior offer'}
+                    {offer.responded_at && ` · answered ${colomboDate(offer.responded_at)}`}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(offer.offer_status)}`}>{offer.offer_status}</span>
+                  <p className="mt-2 font-bold text-slate-900">{offer.currency} {Number(offer.amount).toFixed(2)}</p>
+                </div>
+              </div>
+              {offer.is_current && offer.offer_status === 'offered' && (
+                <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    disabled={savingId === offer.id}
+                    onClick={() => void respondHireOffer(offer, false)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50"
+                  >
+                    Decline amount
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingId === offer.id}
+                    onClick={() => void respondHireOffer(offer, true)}
+                    className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    Accept amount
+                  </button>
+                </div>
+              )}
+              {offer.is_current && offer.offer_status === 'accepted' && (
+                <p className="border-t border-slate-100 pt-3 text-xs text-slate-600">
+                  {offer.currency} {Number(offer.paid_total).toFixed(2)} paid ·
+                  {' '}{offer.currency} {Number(offer.outstanding ?? 0).toFixed(2)} outstanding
+                </p>
+              )}
+            </article>
+          ))}
+          {hirePayouts.length > 0 && (
+            <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+              <h3 className="border-b border-slate-100 p-4 text-sm font-extrabold text-slate-900">Partial payout history</h3>
+              {hirePayouts.map((payout) => (
+                <article key={payout.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-100 p-4 text-sm">
+                  <div>
+                    <b>{payout.booking_ref}</b>
+                    <p className="text-xs text-slate-500">
+                      {colomboDate(`${payout.payment_date}T12:00:00+05:30`)} · {payout.payment_method.replaceAll('_', ' ')}
+                      {payout.payment_reference && ` · ${payout.payment_reference}`}
+                    </p>
+                  </div>
+                  <span className="font-bold text-slate-900">{payout.currency} {Number(payout.amount).toFixed(2)}</span>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight text-slate-900">Legacy one-time settlements</h2>
+            <p className="mt-1 text-xs text-slate-500">Historical settlement records created before the hire-offer and partial-payout ledger.</p>
           </div>
           {loading ? (
             <div className="rounded-3xl border border-slate-200/80 bg-white p-6 text-sm text-slate-500 shadow-sm">Loading settlement history…</div>

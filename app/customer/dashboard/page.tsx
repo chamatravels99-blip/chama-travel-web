@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Navbar from '@/components/shared/Navbar';
 import BookingForm from '@/components/BookingForm';
+import AssignedDriver from './AssignedDriver';
+import BookingDocuments from '@/components/BookingDocuments';
 import { Calendar, CheckCircle, Clock, MapPin, Plus, Wallet } from 'lucide-react';
 
 type QuoteLine = { id: string; description: string; quantity: number; unit_amount: number; line_total: number };
@@ -39,10 +41,13 @@ type PaymentClaim = {
 };
 type Payment = {
   id: string;
+  quote_id: string;
   entry_type: string;
   amount: number;
   currency: string;
   method: string;
+  receipt_number: string | null;
+  payment_date: string | null;
   verified_at: string;
 };
 type Booking = {
@@ -94,6 +99,7 @@ export default function CustomerDashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [claimInputs, setClaimInputs] = useState<Record<string, { amount: string; method: string; reference: string }>>({});
   const [savingAction, setSavingAction] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const loadBookings = useCallback(async () => {
     try {
@@ -103,6 +109,7 @@ export default function CustomerDashboard() {
         throw new Error(result.error || 'Your bookings could not be loaded.');
       }
       setBookings(result.data);
+      setRefreshVersion((value) => value + 1);
       setPageError('');
     } catch (loadError) {
       setPageError(loadError instanceof Error ? loadError.message : 'Your bookings could not be loaded.');
@@ -113,21 +120,21 @@ export default function CustomerDashboard() {
 
   useEffect(() => { void Promise.resolve().then(loadBookings); }, [loadBookings]);
 
-  async function acceptQuote(quoteId: string) {
+  async function respondToQuote(quoteId: string, action: 'accept' | 'reject') {
     setSavingAction(quoteId);
     setNotice('');
     try {
-      const response = await fetch('/api/customer/quotes/accept', {
+      const response = await fetch(`/api/customer/quotes/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quote_id: quoteId }),
       });
       const result = await response.json() as { success?: boolean; error?: string; message?: string };
-      if (!response.ok || !result.success) throw new Error(result.error || 'The quote could not be accepted.');
-      setNotice('Quote accepted. Your booking is now confirmed.');
+      if (!response.ok || !result.success) throw new Error(result.error || 'The quote response could not be recorded.');
+      setNotice(action === 'accept' ? 'Quote accepted. Your booking is now confirmed.' : 'Quote rejected.');
       await loadBookings();
     } catch (actionError) {
-      setNotice(actionError instanceof Error ? actionError.message : 'The quote could not be accepted.');
+      setNotice(actionError instanceof Error ? actionError.message : 'The quote response could not be recorded.');
     } finally {
       setSavingAction('');
     }
@@ -227,7 +234,29 @@ export default function CustomerDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              {bookings.map((booking) => (
+              {bookings.map((booking) => {
+                const acceptedQuote = booking.quotes.find((quote) => quote.quote_status === 'accepted');
+                const acceptedPayments = acceptedQuote
+                  ? booking.payments.filter((payment) => payment.quote_id === acceptedQuote.id)
+                  : [];
+                const paidCents = acceptedPayments.reduce(
+                  (sum, payment) => sum + (payment.entry_type === 'receipt' ? Math.round(Number(payment.amount) * 100) : 0),
+                  0
+                );
+                const refundedCents = acceptedPayments.reduce(
+                  (sum, payment) => sum + (payment.entry_type === 'refund' ? Math.round(Number(payment.amount) * 100) : 0),
+                  0
+                );
+                const netPaidCents = paidCents - refundedCents;
+                const outstandingCents = Math.max(Math.round(Number(acceptedQuote?.total ?? 0) * 100) - netPaidCents, 0);
+                const paymentStatus = refundedCents > 0 && netPaidCents <= 0
+                  ? 'refunded'
+                  : netPaidCents <= 0
+                    ? 'unpaid'
+                    : netPaidCents >= Math.round(Number(acceptedQuote?.total ?? 0) * 100)
+                      ? 'paid'
+                      : 'partially paid';
+                return (
                 <article key={booking.id} className="min-w-0 space-y-5 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-6">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -253,6 +282,22 @@ export default function CustomerDashboard() {
                   </div>
                   <p className="break-words text-xs leading-5 text-slate-600">{booking.passenger_count} passenger(s) · {booking.luggage_count} bag(s){booking.customer_notes ? ` · ${booking.customer_notes}` : ''}</p>
 
+                  {['confirmed', 'assigned', 'in_progress', 'completed'].includes(booking.booking_status) && (
+                    <AssignedDriver key={`${booking.id}-${refreshVersion}`} bookingId={booking.id} />
+                  )}
+                  <BookingDocuments bookingId={booking.id} />
+                  {acceptedQuote && (
+                    <section className="grid gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-4 text-xs text-slate-800 sm:grid-cols-2 lg:grid-cols-3">
+                      <p className="font-bold text-slate-900 sm:col-span-2 lg:col-span-3">Payment summary · {acceptedQuote.currency}</p>
+                      <p>Accepted quote: <b>{acceptedQuote.currency} {Number(acceptedQuote.total).toFixed(2)}</b></p>
+                      <p>Total received: <b>{acceptedQuote.currency} {(paidCents / 100).toFixed(2)}</b></p>
+                      <p>Refunded: <b>{acceptedQuote.currency} {(refundedCents / 100).toFixed(2)}</b></p>
+                      <p>Net paid: <b>{acceptedQuote.currency} {(netPaidCents / 100).toFixed(2)}</b></p>
+                      <p>Outstanding: <b>{acceptedQuote.currency} {(outstandingCents / 100).toFixed(2)}</b></p>
+                      <p>Status: <b>{paymentStatus}</b></p>
+                    </section>
+                  )}
+
                   {booking.quotes.map((quote) => {
                     const canAccept = quote.quote_status === 'sent' && quote.expires_at && new Date(quote.expires_at).getTime() > Date.now();
                     const input = claimInputs[quote.id] ?? { amount: String(quote.total), method: 'cash', reference: '' };
@@ -268,9 +313,10 @@ export default function CustomerDashboard() {
                           {quote.lines.map((line) => <li key={line.id} className="flex min-w-0 justify-between gap-3"><span className="break-words">{line.description} × {line.quantity}</span><span className="shrink-0">{quote.currency} {Number(line.line_total).toFixed(2)}</span></li>)}
                         </ul>
                         {canAccept && (
-                          <button type="button" disabled={savingAction === quote.id} onClick={() => void acceptQuote(quote.id)} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:opacity-50">
-                            {savingAction === quote.id ? 'Accepting…' : 'Accept quote and confirm booking'}
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" disabled={savingAction === quote.id} onClick={() => void respondToQuote(quote.id, 'accept')} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">Accept quote and confirm booking</button>
+                            <button type="button" disabled={savingAction === quote.id} onClick={() => { if (window.confirm('Reject this quote? This will reject the booking.')) void respondToQuote(quote.id, 'reject'); }} className="rounded-xl border border-rose-300 px-4 py-2.5 text-xs font-bold text-rose-700 disabled:opacity-50">Reject quote</button>
+                          </div>
                         )}
                         {quote.quote_status === 'accepted' && !claimExists && (
                           <form onSubmit={(event) => { event.preventDefault(); void submitPaymentClaim(booking.id, quote.id); }} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -294,7 +340,12 @@ export default function CustomerDashboard() {
                         <p key={claim.id} className="flex flex-wrap items-center gap-2 text-xs text-slate-700">Claim · {claim.currency} {Number(claim.amount).toFixed(2)} · {claim.method.replaceAll('_', ' ')} <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(claim.claim_status)}`}>{claim.claim_status}</span></p>
                       ))}
                       {booking.payments.map((payment) => (
-                        <p key={payment.id} className="flex flex-wrap items-center gap-1 text-xs text-slate-700"><CheckCircle className="h-3.5 w-3.5 text-emerald-700" />{payment.entry_type} · {payment.currency} {Number(payment.amount).toFixed(2)} · verified {colomboDate(payment.verified_at)}</p>
+                        <p key={payment.id} className="flex flex-wrap items-center gap-1 text-xs text-slate-700">
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-700" />
+                          {payment.entry_type} · {payment.currency} {Number(payment.amount).toFixed(2)}
+                          {payment.receipt_number ? ` · receipt ${payment.receipt_number}` : ''}
+                          {' · '}{payment.payment_date || `verified ${colomboDate(payment.verified_at)}`}
+                        </p>
                       ))}
                     </section>
                   )}
@@ -314,7 +365,8 @@ export default function CustomerDashboard() {
                     </details>
                   )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

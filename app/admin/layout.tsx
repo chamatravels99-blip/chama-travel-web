@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AuthorizationError, getAuthenticatedContext } from '@/lib/server/authorization';
+import SupabaseRuntimeConfig from '@/app/components/SupabaseRuntimeConfig';
 import AdminShell from '@/app/admin/components/AdminShell';
 
 export default async function AdminLayout({
@@ -25,8 +26,11 @@ export default async function AdminLayout({
     : context.user.email ?? 'Admin user';
 
   return (
-    <AdminShell email={context.user.email ?? ''} displayName={displayName} roles={context.roles}>
-      {children}
-    </AdminShell>
+    <>
+      <SupabaseRuntimeConfig />
+      <AdminShell email={context.user.email ?? ''} displayName={displayName} roles={context.roles}>
+        {children}
+      </AdminShell>
+    </>
   );
 }

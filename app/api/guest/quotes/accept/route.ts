@@ -1,6 +1,7 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { isSameOriginRequest } from '@/lib/server/authorization';
+import { enforceGuestRateLimit } from '@/lib/server/rate-limit';
+import { createServiceClient } from '@/lib/server/service-client';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
@@ -28,16 +29,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: 'This acceptance link is invalid or expired.' }, { status: 400 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
+  const limitedResponse = await enforceGuestRateLimit(request, 'guest_quote_accept', token);
+  if (limitedResponse) return limitedResponse;
+
+  const supabase = createServiceClient();
+  if (!supabase) {
     console.error('Guest quote acceptance is not configured.');
     return NextResponse.json({ success: false, error: 'Quote acceptance is temporarily unavailable.' }, { status: 503 });
   }
-
-  const supabase = createSupabaseClient(url, anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const { error } = await supabase.rpc('accept_guest_quote', {
     p_quote_id: quoteId,
     p_token: token,
