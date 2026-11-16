@@ -1,15 +1,113 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
 import { destinationsData, Destination } from "./destinationsData";
 
 const whatsappNumber = "94711114901";
 
+type PublicDestinationRow = {
+  id: string;
+  name: string;
+  slug: string;
+  region: string | null;
+  tagline: string | null;
+  description: string | null;
+  image_url: string;
+  highlights: string[] | null;
+  best_time: string | null;
+  travel_duration: string | null;
+  is_featured_home: boolean;
+  is_active: boolean;
+  display_order: number;
+};
+
+function isOptimizableImageUrl(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const url = new URL(src);
+    return (
+      url.hostname === "images.pexels.com" ||
+      url.hostname === "images.unsplash.com" ||
+      url.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function mapRowToDestination(row: PublicDestinationRow): Destination {
+  return {
+    id: row.id || row.slug,
+    name: row.name,
+    region: row.region || "Sri Lanka",
+    tagline: row.tagline || `Explore ${row.name} with Chama Travels`,
+    description:
+      row.description ||
+      `Discover iconic sights, culture, and scenic landscapes in ${row.name}.`,
+    image: row.image_url,
+    imageAlt: `${row.name} destination in Sri Lanka`,
+    bestTimeToVisit: row.best_time || "Year-round",
+    highlights:
+      Array.isArray(row.highlights) && row.highlights.length > 0
+        ? row.highlights
+        : [`Explore ${row.name}`, "Private guided tour"],
+    popularActivities:
+      Array.isArray(row.highlights) && row.highlights.length > 0
+        ? row.highlights
+        : ["Guided Sightseeing"],
+    recommendedDays: row.travel_duration || "1 - 3 Days",
+  };
+}
+
 export default function DestinationsPage() {
+  const [destinations, setDestinations] = useState<Destination[]>(destinationsData);
+  const [activeRegion, setActiveRegion] = useState<string>("All");
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadActiveDestinations() {
+      try {
+        const response = await fetch("/api/destinations", { cache: "no-store" });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: PublicDestinationRow[];
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
+          if (result.data.length > 0) {
+            setDestinations(result.data.map(mapRowToDestination));
+          }
+        }
+      } catch {
+        // Graceful fallback to static destinationsData if query fails
+      }
+    }
+
+    void loadActiveDestinations();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const regionPills = useMemo(() => {
+    const set = new Set<string>();
+    for (const dest of destinations) {
+      if (dest.region && dest.region.trim()) {
+        set.add(dest.region.trim());
+      }
+    }
+    return ["All", ...Array.from(set)];
+  }, [destinations]);
+
+  const filteredDestinations = useMemo(() => {
+    if (activeRegion === "All") return destinations;
+    return destinations.filter(
+      (dest) => dest.region.toLowerCase() === activeRegion.toLowerCase()
+    );
+  }, [destinations, activeRegion]);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -20,7 +118,7 @@ export default function DestinationsPage() {
       <section className="relative flex min-h-[55vh] items-center justify-center overflow-hidden pt-28 pb-16">
         {/* Background Image */}
         <div className="absolute inset-0 bg-[url('/images/elephants_are_walking.jpg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center" />
-        
+
         {/* Light Overlay Gradients */}
         <div className="absolute inset-0 bg-slate-900/50" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/30 to-blue-900/20" />
@@ -43,7 +141,7 @@ export default function DestinationsPage() {
 
       {/* DESTINATIONS CARDS GRID (Clean Light Theme) */}
       <section className="px-6 py-16 lg:px-8 max-w-7xl mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-12">
+        <div className="text-center max-w-2xl mx-auto mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
             Handpicked Locations
           </p>
@@ -55,8 +153,35 @@ export default function DestinationsPage() {
           </p>
         </div>
 
+        {/* REGION FILTER PILLS */}
+        <div
+          role="tablist"
+          aria-label="Filter destinations by region"
+          className="mb-10 flex flex-wrap items-center justify-center gap-2.5"
+        >
+          {regionPills.map((region) => {
+            const isSelected = activeRegion === region;
+            return (
+              <button
+                key={region}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => setActiveRegion(region)}
+                className={`rounded-full px-5 py-2.5 text-xs font-bold transition duration-200 ${
+                  isSelected
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 scale-105"
+                    : "border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-600"
+                }`}
+              >
+                {region === "All" ? "All Destinations" : region}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {destinationsData.map((dest) => (
+          {filteredDestinations.map((dest) => (
             <article
               key={dest.id}
               className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:border-blue-300"
@@ -66,6 +191,7 @@ export default function DestinationsPage() {
                   src={dest.image}
                   alt={dest.imageAlt}
                   fill
+                  unoptimized={!isOptimizableImageUrl(dest.image)}
                   className="object-cover transition duration-500 group-hover:scale-105"
                 />
                 <span className="absolute top-4 left-4 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-800 shadow-md backdrop-blur-md">
@@ -88,9 +214,9 @@ export default function DestinationsPage() {
                     Top Experiences
                   </p>
                   <ul className="space-y-1.5 text-xs text-slate-700">
-                    {dest.highlights.slice(0, 2).map((item, idx) => (
+                    {dest.highlights.slice(0, 3).map((item, idx) => (
                       <li key={idx} className="flex items-center gap-2">
-                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
                           ✓
                         </span>
                         <span>{item}</span>
@@ -130,7 +256,7 @@ export default function DestinationsPage() {
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 text-slate-900 shadow-2xl">
             <button
               onClick={() => setSelectedDestination(null)}
-              className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+              className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
             >
               ✕
             </button>
@@ -140,6 +266,7 @@ export default function DestinationsPage() {
                 src={selectedDestination.image}
                 alt={selectedDestination.imageAlt}
                 fill
+                unoptimized={!isOptimizableImageUrl(selectedDestination.image)}
                 className="object-cover"
               />
             </div>
@@ -147,8 +274,12 @@ export default function DestinationsPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
               📍 {selectedDestination.region}
             </span>
-            <h2 className="mt-1 text-3xl font-extrabold text-slate-900">{selectedDestination.name}</h2>
-            <p className="mt-2 text-sm text-slate-600 leading-relaxed">{selectedDestination.description}</p>
+            <h2 className="mt-1 text-3xl font-extrabold text-slate-900">
+              {selectedDestination.name}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+              {selectedDestination.description}
+            </p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2 border-t border-b border-slate-100 py-4 text-xs">
               <div className="bg-slate-50 p-3 rounded-xl">
@@ -168,7 +299,7 @@ export default function DestinationsPage() {
               <ul className="space-y-2 text-xs text-slate-700">
                 {selectedDestination.highlights.map((h, i) => (
                   <li key={i} className="flex items-center gap-2">
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-600">
                       ✓
                     </span>
                     <span>{h}</span>
@@ -192,7 +323,8 @@ export default function DestinationsPage() {
           </div>
         </div>
       )}
-{/* Floating WhatsApp Quick Action Button */}
+
+      {/* Floating WhatsApp Quick Action Button */}
       <a
         href="https://wa.me/94711114901?text=Hello%20Chama%20Travels%2C%20I%20am%20browsing%20your%20tours%20page%20and%20would%20like%20to%20inquire."
         target="_blank"

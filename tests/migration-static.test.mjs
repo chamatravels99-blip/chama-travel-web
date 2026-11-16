@@ -256,3 +256,25 @@ test('booking leg finite-time constraint protects new writes without validating 
   }
   assert.match(migration, /\)\s+not valid;/i);
 });
+
+test('destinations management migration enforces RLS, admin policies, storage bucket, and seeds destinations', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160001_destinations_management.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create table if not exists public\.destinations/i);
+  assert.match(migration, /alter table public\.destinations enable row level security/i);
+  assert.match(migration, /create policy destinations_public_read_active[\s\S]*using \(is_active = true\)/i);
+  assert.match(migration, /create policy destinations_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(migration, /'website-assets'/);
+  assert.match(migration, /on conflict \(slug\) do update/i);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Destinations',\s*href:\s*'\/admin\/destinations',\s*icon:\s*MapPin,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+});
+

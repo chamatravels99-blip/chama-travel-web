@@ -1,73 +1,150 @@
 "use client";
 
 import Image from "next/image";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-const destinations = [
+export type HomeDestinationItem = {
+  id?: string;
+  name: string;
+  slug?: string;
+  region?: string | null;
+  tagline?: string | null;
+  description: string;
+  image: string;
+};
+
+export const fallbackHomeDestinations: HomeDestinationItem[] = [
   {
     name: "Colombo",
-    image:
-      "/images/colombo-sri-lanka.jpg",
+    image: "/images/colombo-sri-lanka.jpg",
     description: "The bustling capital city",
   },
   {
     name: "Negombo",
-    image:
-      "/images/negombo-heritance.jpg",
+    image: "/images/negombo-heritance.jpg",
     description: "Coastal charm & fish markets",
   },
   {
     name: "Kandy",
-    image:
-      "/images/temple-of-the-tooth.jpg",
+    image: "/images/temple-of-the-tooth.jpg",
     description: "Cultural heart of Sri Lanka",
   },
   {
     name: "Sigiriya",
-    image:
-      "/images/Sigiriya.jpeg",
+    image: "/images/Sigiriya.jpeg",
     description: "The ancient rock fortress",
   },
   {
     name: "Ella",
-    image:
-      "/images/ella_railway.JPG",
+    image: "/images/ella_railway.JPG",
     description: "Misty mountains & waterfalls",
   },
   {
     name: "Nuwara Eliya",
-    image:
-      "/images/nuwaraeliya.jpg",
+    image: "/images/nuwaraeliya.jpg",
     description: "Little England & tea estates",
   },
   {
     name: "Galle",
-    image:
-      "/images/galle_fort.JPG",
+    image: "/images/galle_fort.JPG",
     description: "Historic Dutch Fort",
   },
   {
     name: "Bentota",
-    image:
-      "/images/benthota_water_sport.jpg",
+    image: "/images/benthota_water_sport.jpg",
     description: "Golden beaches & water sports",
   },
   {
     name: "Yala",
-    image:
-      "/images/leopard-yala-national-park.jpg",
+    image: "/images/leopard-yala-national-park.jpg",
     description: "Wildlife & leopard safaris",
   },
   {
     name: "Mirissa",
-    image:
-      "/images/mirissa_turtle.jpg",
+    image: "/images/mirissa_turtle.jpg",
     description: "Whale watching & surf breaks",
   },
 ];
 
-export default function Destinations() {
+function isOptimizableImageUrl(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const url = new URL(src);
+    return (
+      url.hostname === "images.pexels.com" ||
+      url.hostname === "images.unsplash.com" ||
+      url.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
+
+type DestinationsProps = {
+  items?: HomeDestinationItem[];
+};
+
+export default function Destinations({ items }: DestinationsProps) {
   const carouselRef = useRef<HTMLDivElement>(null);
+  const [fetchedDestinations, setFetchedDestinations] = useState<HomeDestinationItem[] | null>(
+    null
+  );
+
+  const destinations =
+    items && items.length > 0
+      ? items
+      : fetchedDestinations && fetchedDestinations.length > 0
+        ? fetchedDestinations
+        : fallbackHomeDestinations;
+
+  useEffect(() => {
+    if (items && items.length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+    async function loadFeaturedDestinations() {
+      try {
+        const response = await fetch("/api/destinations?featured=true", {
+          cache: "no-store",
+        });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: Array<{
+            id: string;
+            name: string;
+            slug: string;
+            region: string | null;
+            tagline: string | null;
+            description: string | null;
+            image_url: string;
+          }>;
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
+          if (result.data.length > 0) {
+            setFetchedDestinations(
+              result.data.map((row) => ({
+                id: row.id,
+                name: row.name,
+                slug: row.slug,
+                region: row.region,
+                tagline: row.tagline,
+                description: row.tagline || row.description || "Explore Sri Lanka",
+                image: row.image_url,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Keep graceful static fallback if database query fails
+      }
+    }
+
+    void loadFeaturedDestinations();
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   const scroll = (direction: -1 | 1) => {
     const carousel = carouselRef.current;
@@ -78,7 +155,7 @@ export default function Destinations() {
 
     const gap = Number.parseFloat(getComputedStyle(carousel).columnGap) || 0;
     const cardWidth = firstCard.getBoundingClientRect().width;
-    
+
     // Scroll by slightly less than the fully visible width to show continuity
     const visibleWidth = carousel.clientWidth;
     const scrollAmount = Math.max(cardWidth + gap, visibleWidth * 0.8);
@@ -111,20 +188,21 @@ export default function Destinations() {
           >
             {destinations.map((destination) => (
               <div
-                key={destination.name}
+                key={destination.id || destination.name}
                 className="group/card relative flex-[0_0_calc(50%-0.5rem)] sm:flex-[0_0_calc(33.333%-0.833rem)] lg:flex-[0_0_calc(20%-1.2rem)] snap-start overflow-hidden rounded-3xl aspect-[4/5] shadow-[0_8px_20px_rgba(0,0,0,0.08)] transition duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(0,0,0,0.15)] bg-slate-900"
               >
                 <Image
                   src={destination.image}
                   alt={destination.name}
                   fill
+                  unoptimized={!isOptimizableImageUrl(destination.image)}
                   sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 20vw"
                   className="object-cover transition duration-700 ease-out group-hover/card:scale-110"
                 />
-                
+
                 {/* Dark gradient for text readability */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 transition duration-500 group-hover/card:opacity-90" />
-                
+
                 {/* Glassmorphism overlay */}
                 <div className="absolute inset-0 rounded-3xl border border-white/20 bg-white/5 backdrop-blur-[1px] transition duration-500 group-hover/card:bg-transparent group-hover/card:backdrop-blur-none" />
 
@@ -132,7 +210,7 @@ export default function Destinations() {
                   <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white drop-shadow-md">
                     {destination.name}
                   </h3>
-                  <p className="mt-1 translate-y-3 text-xs sm:text-sm text-white/90 opacity-0 transition duration-500 ease-out group-hover/card:translate-y-0 group-hover/card:opacity-100">
+                  <p className="mt-1 translate-y-3 text-xs sm:text-sm text-white/90 opacity-0 transition duration-500 ease-out group-hover/card:translate-y-0 group-hover/card:opacity-100 line-clamp-2">
                     {destination.description}
                   </p>
                 </div>

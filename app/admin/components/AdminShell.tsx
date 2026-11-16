@@ -47,7 +47,7 @@ const OPERATIONS_ROLES: AppRole[] = ['admin', 'super_admin'];
 const navigation: NavigationItem[] = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: Home, roles: OPERATIONS_ROLES },
   { label: 'Bookings', href: '/admin/bookings', icon: Clipboard, roles: OPERATIONS_ROLES },
-  { label: 'Destinations', icon: MapPin, roles: ADMIN_ROLES, comingSoon: true },
+  { label: 'Destinations', href: '/admin/destinations', icon: MapPin, roles: ADMIN_ROLES },
   { label: 'Fleet', href: '/admin/fleet', icon: Car, roles: ADMIN_ROLES },
   { label: 'Tour Packages', icon: Map, roles: ADMIN_ROLES, comingSoon: true },
   { label: 'Gallery & Activities', icon: Image, roles: ADMIN_ROLES, comingSoon: true },
