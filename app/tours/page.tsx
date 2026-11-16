@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Footer from "../components/Footer";
 import CustomTourCTA from "./components/CustomTourCTA";
 import TourCard from "./components/TourCard";
@@ -8,15 +8,158 @@ import TourFilters from "./components/TourFilters";
 import TourModal from "./components/TourModal";
 import ToursNavbar from "./components/ToursNavbar";
 import { toursData } from "./toursData";
-import { Tour, TourCategory } from "./types";
+import { ItineraryDay, Tour, TourCategory } from "./types";
 
-const categories: TourCategory[] = [
-  "All",
-  "Multi-Day Round Tours",
-  "Day Trips",
-  "Coastal Escapes",
-  "Tailor-Made Itineraries",
-];
+type PublicTourPackageRow = {
+  id: string;
+  title: string;
+  slug: string;
+  category: string | null;
+  duration: string;
+  days_count: number | null;
+  price_usd: number | null;
+  price_lkr: number | null;
+  price_note: string | null;
+  tagline: string | null;
+  description: string | null;
+  image_url: string;
+  destinations_covered: string[] | null;
+  highlights: string[] | null;
+  included: string[] | null;
+  itinerary: Array<{
+    day?: number;
+    title?: string;
+    route?: string;
+    description?: string;
+    activities?: string[];
+    overnightLocation?: string;
+    travelTime?: string;
+  }> | null;
+  is_featured_home: boolean;
+  is_active: boolean;
+  display_order: number;
+};
+
+function mapRowToTour(row: PublicTourPackageRow): Tour {
+  const existingMatch = toursData.find((t) => t.id === row.slug);
+  const days = Math.max(1, Number(row.days_count) || 1);
+  const baseUsd =
+    row.price_usd !== null && row.price_usd !== undefined && Number(row.price_usd) > 0
+      ? Number(row.price_usd)
+      : existingMatch?.startingPriceUSD ?? 120;
+
+  const badgeFromTagline = row.tagline?.includes("•")
+    ? row.tagline.split("•")[0].trim()
+    : row.is_featured_home
+      ? "Featured"
+      : existingMatch?.badge;
+
+  const destinations =
+    Array.isArray(row.destinations_covered) && row.destinations_covered.length > 0
+      ? row.destinations_covered
+      : existingMatch?.routeHighlights ?? ["Colombo", "Sigiriya", "Kandy", "Ella"];
+
+  const highlights =
+    Array.isArray(row.highlights) && row.highlights.length > 0
+      ? row.highlights
+      : existingMatch?.keyHighlights ?? [
+          `Private guided journey covering ${destinations.join(", ")}`,
+          "Dedicated air-conditioned vehicle and English-speaking chauffeur",
+          "100% customizable daily schedule and photo stops",
+        ];
+
+  const inclusions =
+    Array.isArray(row.included) && row.included.length > 0
+      ? row.included
+      : existingMatch?.inclusions ?? [
+          "Private air-conditioned vehicle exclusively for your party",
+          "Experienced English-speaking chauffeur guide",
+          "All fuel costs, highway tolls, and parking fees",
+          "Driver accommodation and meals covered",
+          "Airport pickup and drop-off",
+        ];
+
+  const mappedItinerary: ItineraryDay[] =
+    Array.isArray(row.itinerary) && row.itinerary.length > 0
+      ? row.itinerary.map((item, idx) => ({
+          day: Number(item.day) || idx + 1,
+          title: item.title || `Day ${idx + 1}`,
+          route: item.route || destinations.join(" → "),
+          description: item.description || "",
+          activities: Array.isArray(item.activities) ? item.activities : [],
+          overnightLocation: item.overnightLocation,
+          travelTime: item.travelTime,
+        }))
+      : existingMatch?.itinerary ?? [
+          {
+            day: 1,
+            title: row.title,
+            route: destinations.join(" → "),
+            description:
+              row.description ||
+              row.tagline ||
+              "Enjoy a private customizable Sri Lanka tour with Chama Travels.",
+            activities: highlights,
+          },
+        ];
+
+  const sedanTotal = Math.round(baseUsd);
+  const vanTotal = Math.round(baseUsd * 1.35);
+  const suvTotal = Math.round(baseUsd * 1.7);
+
+  return {
+    id: row.slug || row.id,
+    title: row.title,
+    category: row.category || existingMatch?.category || "Multi-Day Round Tours",
+    duration: row.duration,
+    badge: badgeFromTagline,
+    image: row.image_url,
+    imageAlt: `${row.title} - Chama Travels Sri Lanka`,
+    shortDescription:
+      row.description ||
+      row.tagline ||
+      existingMatch?.shortDescription ||
+      `Explore ${destinations.join(", ")} with Chama Travels.`,
+    routeHighlights: destinations,
+    keyHighlights: highlights,
+    startingPriceUSD: sedanTotal,
+    startingPriceLKR: row.price_lkr !== null ? Number(row.price_lkr) : null,
+    pricingUnit: row.price_note || existingMatch?.pricingUnit || "per vehicle",
+    vehiclePricing: [
+      {
+        vehicleType: "Comfort Sedan (Axio / Prius / Fit)",
+        paxCapacity: "1 - 3 Passengers",
+        luggageCapacity: "2 Large + 2 Small Bags",
+        totalPriceUSD: sedanTotal,
+        perDayUSD: Math.max(1, Math.round(sedanTotal / days)),
+        recommendedFor: "Couples, solo travelers & small families",
+      },
+      {
+        vehicleType: "Spacious Van (Toyota KDH / HiAce)",
+        paxCapacity: "4 - 6 Passengers",
+        luggageCapacity: "5 - 7 Large Bags",
+        totalPriceUSD: vanTotal,
+        perDayUSD: Math.max(1, Math.round(vanTotal / days)),
+        recommendedFor: "Families and medium groups with full luggage",
+      },
+      {
+        vehicleType: "Premium SUV / Luxury Commuter",
+        paxCapacity: "4 - 10 Passengers",
+        luggageCapacity: "8 - 10 Large Bags",
+        totalPriceUSD: suvTotal,
+        perDayUSD: Math.max(1, Math.round(suvTotal / days)),
+        recommendedFor: "Large family gatherings or travel groups",
+      },
+    ],
+    inclusions,
+    exclusions: existingMatch?.exclusions ?? [
+      "Hotel accommodations (can be arranged on request at wholesale rates)",
+      "Entrance tickets to monuments and national parks",
+      "Meals and personal expenses",
+    ],
+    itinerary: mappedItinerary,
+  };
+}
 
 const faqs = [
   {
@@ -47,39 +190,76 @@ const faqs = [
 ];
 
 export default function ToursPage() {
+  const [tours, setTours] = useState<Tour[]>(toursData);
   const [activeCategory, setActiveCategory] = useState<TourCategory>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadActivePackages() {
+      try {
+        const response = await fetch("/api/tour-packages", { cache: "no-store" });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: PublicTourPackageRow[];
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
+          if (result.data.length > 0) {
+            setTours(result.data.map(mapRowToTour));
+          }
+        }
+      } catch {
+        // Keep graceful fallback to static toursData if database query fails
+      }
+    }
+
+    void loadActivePackages();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = useMemo(() => {
+    const defaultCats = [
+      "Multi-Day Round Tours",
+      "Day Trips",
+      "Coastal Escapes",
+      "Tailor-Made Itineraries",
+    ];
+    const set = new Set<string>(defaultCats);
+    for (const tour of tours) {
+      if (tour.category && tour.category.trim()) {
+        set.add(tour.category.trim());
+      }
+    }
+    return ["All", ...Array.from(set)];
+  }, [tours]);
+
   // Calculate total counts per category
   const totalCounts = useMemo(() => {
-    const counts: Record<TourCategory, number> = {
-      All: toursData.length,
-      "Multi-Day Round Tours": 0,
-      "Day Trips": 0,
-      "Coastal Escapes": 0,
-      "Tailor-Made Itineraries": 0,
+    const counts: Record<string, number> = {
+      All: tours.length,
     };
+    for (const cat of categories) {
+      if (cat !== "All") counts[cat] = 0;
+    }
 
-    toursData.forEach((tour) => {
-      if (counts[tour.category] !== undefined) {
-        counts[tour.category] += 1;
-      }
+    tours.forEach((tour) => {
+      counts[tour.category] = (counts[tour.category] ?? 0) + 1;
     });
 
     return counts;
-  }, []);
+  }, [tours, categories]);
 
   // Filter tours based on active category and search query
   const filteredTours = useMemo(() => {
-    return toursData.filter((tour) => {
-      // Category filter
+    return tours.filter((tour) => {
       const matchesCategory =
         activeCategory === "All" || tour.category === activeCategory;
 
-      // Search query filter
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -90,7 +270,7 @@ export default function ToursPage() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [tours, activeCategory, searchQuery]);
 
   const handleOpenModal = (tour: Tour) => {
     setSelectedTour(tour);

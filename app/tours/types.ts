@@ -1,9 +1,4 @@
-export type TourCategory =
-  | "All"
-  | "Multi-Day Round Tours"
-  | "Day Trips"
-  | "Coastal Escapes"
-  | "Tailor-Made Itineraries";
+export type TourCategory = string;
 
 export interface VehiclePriceOption {
   vehicleType: string;
@@ -27,7 +22,7 @@ export interface ItineraryDay {
 export interface Tour {
   id: string;
   title: string;
-  category: "Multi-Day Round Tours" | "Day Trips" | "Coastal Escapes" | "Tailor-Made Itineraries";
+  category: string;
   duration: string;
   badge?: string;
   image: string;
@@ -36,7 +31,8 @@ export interface Tour {
   routeHighlights: string[];
   keyHighlights: string[];
   startingPriceUSD: number;
-  pricingUnit: "per vehicle" | "per person";
+  startingPriceLKR?: number | null;
+  pricingUnit: string;
   vehiclePricing: VehiclePriceOption[];
   inclusions: string[];
   exclusions: string[];

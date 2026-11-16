@@ -13,6 +13,20 @@ interface TourModalProps {
 
 const whatsappNumber = "94711114901";
 
+function isOptimizableImageUrl(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const url = new URL(src);
+    return (
+      url.hostname === "images.pexels.com" ||
+      url.hostname === "images.unsplash.com" ||
+      url.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function TourModal({ tour, isOpen, onClose }: TourModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<
@@ -169,6 +183,7 @@ Please let me know availability and how to proceed.`
             alt={tour.imageAlt}
             fill
             priority
+            unoptimized={!isOptimizableImageUrl(tour.image)}
             sizes="(max-width: 1024px) 100vw, 1024px"
             className="object-cover"
           />

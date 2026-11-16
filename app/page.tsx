@@ -7,7 +7,15 @@ import ToursNavbar from "./tours/components/ToursNavbar";
 
 const whatsappNumber = "94711114901";
 
-const featuredTours = [
+type FeaturedTourItem = {
+  id?: string;
+  title: string;
+  days: string;
+  image: string;
+  imageAlt: string;
+};
+
+const fallbackFeaturedTours: FeaturedTourItem[] = [
   {
     title: "Highlights of Sri Lanka",
     days: "8 Days / 7 Nights",
@@ -30,6 +38,20 @@ const featuredTours = [
     imageAlt: "Nine Arches Bridge surrounded by Ella's green highlands",
   },
 ];
+
+function isOptimizableImageUrl(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const url = new URL(src);
+    return (
+      url.hostname === "images.pexels.com" ||
+      url.hostname === "images.unsplash.com" ||
+      url.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
 
 const customerReviews = [
   {
@@ -117,6 +139,9 @@ const galleryPhotos = [
 ];
 
 export default function Home() {
+  const [featuredTours, setFeaturedTours] = useState<FeaturedTourItem[]>(
+    fallbackFeaturedTours,
+  );
   const [activeTourIndex, setActiveTourIndex] = useState(0);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
     null,
@@ -126,6 +151,46 @@ export default function Home() {
   const reviewCarouselRef = useRef<HTMLDivElement>(null);
   const isMobileCarousel = useRef(false);
   const galleryIsOpen = activeGalleryIndex !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFeaturedTours() {
+      try {
+        const response = await fetch("/api/tour-packages?featured=true", {
+          cache: "no-store",
+        });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: Array<{
+            id: string;
+            title: string;
+            duration: string;
+            image_url: string;
+          }>;
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
+          if (result.data.length > 0) {
+            setFeaturedTours(
+              result.data.map((pkg) => ({
+                id: pkg.id,
+                title: pkg.title,
+                days: pkg.duration,
+                image: pkg.image_url,
+                imageAlt: `${pkg.title} - Chama Travels Sri Lanka`,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Keep graceful static fallback if database query fails
+      }
+    }
+
+    void loadFeaturedTours();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     isMobileCarousel.current = window.innerWidth < 768;
@@ -590,6 +655,7 @@ export default function Home() {
                       alt={tour.imageAlt}
                       width={1000}
                       height={625}
+                      unoptimized={!isOptimizableImageUrl(tour.image)}
                       loading={index === 0 ? "eager" : "lazy"}
                       sizes="(max-width: 767px) 100vw, (max-width: 1279px) 33vw, 25vw"
                       className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.03]"

@@ -278,3 +278,24 @@ test('destinations management migration enforces RLS, admin policies, storage bu
   );
 });
 
+test('tour packages management migration enforces RLS, admin policies, and activates AdminShell item #5', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160002_tour_packages_management.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create table if not exists public\.tour_packages/i);
+  assert.match(migration, /alter table public\.tour_packages enable row level security/i);
+  assert.match(migration, /create policy tour_packages_public_read_active[\s\S]*using \(is_active = true\)/i);
+  assert.match(migration, /create policy tour_packages_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(migration, /on conflict \(slug\) do update/i);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Tour Packages',\s*href:\s*'\/admin\/tour-packages',\s*icon:\s*Map,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+});
+
+

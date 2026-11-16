@@ -10,6 +10,20 @@ interface TourCardProps {
 
 const whatsappNumber = "94711114901";
 
+function isOptimizableImageUrl(src: string): boolean {
+  if (src.startsWith("/")) return true;
+  try {
+    const url = new URL(src);
+    return (
+      url.hostname === "images.pexels.com" ||
+      url.hostname === "images.unsplash.com" ||
+      url.hostname.endsWith(".supabase.co")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function TourCard({ tour, onOpenModal }: TourCardProps) {
   const whatsappInquiryUrl = `https://wa.me/${whatsappNumber}?text=Hello%20Chama%20Travels%2C%20I%20am%20interested%20in%20the%20${encodeURIComponent(
     tour.title
@@ -37,6 +51,7 @@ export default function TourCard({ tour, onOpenModal }: TourCardProps) {
           src={tour.image}
           alt={tour.imageAlt}
           fill
+          unoptimized={!isOptimizableImageUrl(tour.image)}
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className="object-cover transition duration-700 ease-out group-hover:scale-105"
         />

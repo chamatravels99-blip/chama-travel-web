@@ -49,7 +49,7 @@ const navigation: NavigationItem[] = [
   { label: 'Bookings', href: '/admin/bookings', icon: Clipboard, roles: OPERATIONS_ROLES },
   { label: 'Destinations', href: '/admin/destinations', icon: MapPin, roles: ADMIN_ROLES },
   { label: 'Fleet', href: '/admin/fleet', icon: Car, roles: ADMIN_ROLES },
-  { label: 'Tour Packages', icon: Map, roles: ADMIN_ROLES, comingSoon: true },
+  { label: 'Tour Packages', href: '/admin/tour-packages', icon: Map, roles: ADMIN_ROLES },
   { label: 'Gallery & Activities', icon: Image, roles: ADMIN_ROLES, comingSoon: true },
   { label: 'Analytics', icon: BarChart3, roles: ADMIN_ROLES, comingSoon: true },
   { label: 'Customers', icon: Users, roles: ADMIN_ROLES, comingSoon: true },
