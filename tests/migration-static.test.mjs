@@ -298,4 +298,27 @@ test('tour packages management migration enforces RLS, admin policies, and activ
   );
 });
 
+test('gallery & activities migration enforces RLS, admin policies, and activates AdminShell item #6', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160003_gallery_activities_management.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create table if not exists public\.gallery_photos/i);
+  assert.match(migration, /create table if not exists public\.activities/i);
+  assert.match(migration, /alter table public\.gallery_photos enable row level security/i);
+  assert.match(migration, /alter table public\.activities enable row level security/i);
+  assert.match(migration, /create policy gallery_photos_public_read_active[\s\S]*using \(is_active = true\)/i);
+  assert.match(migration, /create policy gallery_photos_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(migration, /create policy activities_public_read_active[\s\S]*using \(is_active = true\)/i);
+  assert.match(migration, /create policy activities_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Gallery & Activities',\s*href:\s*'\/admin\/gallery-activities',\s*icon:\s*Image,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+});
+
 

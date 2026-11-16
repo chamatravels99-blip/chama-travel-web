@@ -7,24 +7,21 @@ import TourModal from "./tours/components/TourModal";
 import ToursNavbar from "./tours/components/ToursNavbar";
 import { mapRowToTour, PublicTourPackageRow, toursData } from "./tours/toursData";
 import type { Tour } from "./tours/types";
+import {
+  type ActivityRecord,
+  FALLBACK_ACTIVITIES,
+  FALLBACK_HOME_GALLERY_PHOTOS,
+  type GalleryPhotoRecord,
+  galleryLayoutClass,
+  isOptimizableImageUrl,
+  normalizeActivity,
+  normalizeGalleryPhoto,
+  whatsappActivityLink,
+} from "@/lib/gallery-activities";
 
 const whatsappNumber = "94711114901";
 
 const fallbackFeaturedTours: Tour[] = toursData.slice(0, 3);
-
-function isOptimizableImageUrl(src: string): boolean {
-  if (src.startsWith("/")) return true;
-  try {
-    const url = new URL(src);
-    return (
-      url.hostname === "images.pexels.com" ||
-      url.hostname === "images.unsplash.com" ||
-      url.hostname.endsWith(".supabase.co")
-    );
-  } catch {
-    return false;
-  }
-}
 
 const customerReviews = [
   {
@@ -69,52 +66,15 @@ const tripAdvisorUrl =
 const googleMapsUrl =
   "https://www.google.com/maps/place/Chama+Travel+%26+Tours/data=!4m7!3m6!1s0x2554543128f9092d:0x2780ba119100211a!8m2!3d7.0815764!4d80.0870175!16s%2Fg%2F11lypjsjpg!19sChIJLQn5KDFUVCURGiEAkRG6gCc";
 
-const galleryPhotos = [
-  {
-    src: "/images/WhatsApp Image 2024-12-29 at 13.03.27_9da2629c.jpg",
-    alt: "Happy travelers exploring Sri Lanka with Chama Travels",
-    featured: true,
-  },
-  {
-    src: "/images/2024_07_26_21_27_56_47FA4CFD-FCDD-4AC3-94BF-AC5FD4CE820F.jpg",
-    alt: "Scenic travel moments and sightseeing in Sri Lanka",
-  },
-  {
-    src: "/images/2024_03_30_11_21_19_IMG_1200.jpg",
-    alt: "Tourists enjoying private transport across Sri Lankan destinations",
-  },
-  {
-    src: "/images/2024_10_12_15_22_52_IMG_3436.jpg",
-    alt: "Cultural landmark visit with Chama Travels chauffeur guide",
-    featured: true,
-  },
-  {
-    src: "/images/2024_11_28_09_44_28_IMG_4455.jpg",
-    alt: "Travelers visiting Sri Lanka highlands and tea plantations",
-  },
-  {
-    src: "/images/2024_12_18_10_08_44_IMG_4962.jpg",
-    alt: "Memorable holiday moments with local Sri Lankan driver guide",
-  },
-  {
-    src: "/images/2025_07_23_06_19_23_IMG_0757.jpg",
-    alt: "Sigiriya Rock Fortress panoramic viewpoint in Sri Lanka",
-  },
-  {
-    src: "/images/2025_10_01_10_59_58_IMG_2604(1).jpg",
-    alt: "Family touring iconic Sri Lanka heritage sites",
-    wide: true,
-  },
-  {
-    src: "/images/2026_02_27_10_52_34_IMG_5805.jpg",
-    alt: "Island wildlife and coastal adventure with Chama Travels",
-  },
-];
-
 export default function Home() {
   const [featuredTours, setFeaturedTours] = useState<Tour[]>(
     fallbackFeaturedTours,
   );
+  const [homeGalleryPhotos, setHomeGalleryPhotos] = useState<
+    GalleryPhotoRecord[]
+  >(FALLBACK_HOME_GALLERY_PHOTOS);
+  const [homeActivities, setHomeActivities] =
+    useState<ActivityRecord[]>(FALLBACK_ACTIVITIES);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [activeTourIndex, setActiveTourIndex] = useState(0);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
@@ -128,26 +88,57 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    async function loadFeaturedTours() {
-      try {
-        const response = await fetch("/api/tour-packages?featured=true", {
-          cache: "no-store",
-        });
-        const result = (await response.json()) as {
-          success?: boolean;
-          data?: PublicTourPackageRow[];
-        };
-        if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
-          if (result.data.length > 0) {
+    async function loadHomeContent() {
+      const [toursRes, galleryRes, activitiesRes] = await Promise.allSettled([
+        fetch("/api/tour-packages?featured=true", { cache: "no-store" }),
+        fetch("/api/gallery?featured=true", { cache: "no-store" }),
+        fetch("/api/activities?featured=true", { cache: "no-store" }),
+      ]);
+
+      if (toursRes.status === "fulfilled" && toursRes.value.ok) {
+        try {
+          const result = (await toursRes.value.json()) as {
+            success?: boolean;
+            data?: PublicTourPackageRow[];
+          };
+          if (!cancelled && result.success && Array.isArray(result.data) && result.data.length > 0) {
             setFeaturedTours(result.data.map(mapRowToTour));
           }
+        } catch {
+          // Keep graceful static fallback
         }
-      } catch {
-        // Keep graceful static fallback if database query fails
+      }
+
+      if (galleryRes.status === "fulfilled" && galleryRes.value.ok) {
+        try {
+          const result = (await galleryRes.value.json()) as {
+            success?: boolean;
+            data?: GalleryPhotoRecord[];
+          };
+          if (!cancelled && result.success && Array.isArray(result.data) && result.data.length > 0) {
+            setHomeGalleryPhotos(result.data.map(normalizeGalleryPhoto));
+          }
+        } catch {
+          // Keep graceful static fallback
+        }
+      }
+
+      if (activitiesRes.status === "fulfilled" && activitiesRes.value.ok) {
+        try {
+          const result = (await activitiesRes.value.json()) as {
+            success?: boolean;
+            data?: ActivityRecord[];
+          };
+          if (!cancelled && result.success && Array.isArray(result.data) && result.data.length > 0) {
+            setHomeActivities(result.data.map(normalizeActivity));
+          }
+        } catch {
+          // Keep graceful static fallback
+        }
       }
     }
 
-    void loadFeaturedTours();
+    void loadHomeContent();
     return () => {
       cancelled = true;
     };
@@ -186,7 +177,9 @@ export default function Home() {
         );
       } else if (event.key === "ArrowRight") {
         setActiveGalleryIndex((index) =>
-          index === null ? null : Math.min(galleryPhotos.length - 1, index + 1),
+          index === null
+            ? null
+            : Math.min(homeGalleryPhotos.length - 1, index + 1),
         );
       }
     };
@@ -196,7 +189,7 @@ export default function Home() {
       document.body.style.overflow = previousBodyOverflow;
       window.removeEventListener("keydown", handleGalleryKeyDown);
     };
-  }, [galleryIsOpen]);
+  }, [galleryIsOpen, homeGalleryPhotos.length]);
 
   const moveTour = (direction: -1 | 1) => {
     const carousel = tourCarouselRef.current;
@@ -418,98 +411,18 @@ export default function Home() {
               tabIndex={0}
               className="flex snap-x snap-mandatory gap-5 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4 md:mx-12"
             >
-            {[
-              {
-                title: "Sri Lankan Village & Food Experience",
-                description:
-                  "Share village life through local food, customs and rural scenery.",
-                image:
-                  "/images/village_tour.jpg",
-                imageAlt: "Outdoor cooking in a Sri Lankan village",
-              },
-              {
-                title: "Ella Hiking & Adventure",
-                description:
-                  "Explore Ella’s green highlands, trails and scenic viewpoints.",
-                image:
-                  "/images/Ella_adventure.JPG",
-                imageAlt: "Green hills and valleys in Ella, Sri Lanka",
-              },
-              {
-                title: "Yala Wildlife Safari",
-                description:
-                  "Look for native wildlife among Yala’s forests and open landscapes.",
-                image:
-                  "/images/yala-leopard.jpg",
-                imageAlt: "Elephants in the greenery of Yala National Park",
-              },
-              {
-                title: "Udawalawe Wildlife Safari",
-                description:
-                  "Discover open grasslands and Sri Lankan elephants in the wild.",
-                image:
-                  "/images/udawalawe.jpg",
-                imageAlt: "Sri Lankan elephant in Udawalawe National Park",
-              },
-              {
-                title: "Mirissa Whale Watching",
-                description:
-                  "Head out to sea in search of whales along the southern coast.",
-                image:
-                  "/images/whale.jpg",
-                imageAlt: "Blue whale diving in the ocean near Sri Lanka",
-              },
-              {
-                title: "Kithulgala Whitewater Rafting",
-                description:
-                  "Navigate lively rapids surrounded by tropical river scenery.",
-                image:
-                  "/images/kithulgala_rafting.jpg",
-                imageAlt: "Rafters navigating whitewater on a tropical river",
-              },
-              {
-                title: "Madu River Boat Safari",
-                description:
-                  "Cruise calm waterways through mangroves and river islands.",
-                image:
-                  "/images/madu_river.jpg",
-                imageAlt: "Boat travelling through calm mangrove waterways",
-              },
-              {
-                title: "Tea Plantation Experience",
-                description:
-                  "Walk through green tea fields in Sri Lanka’s hill country.",
-                image:
-                  "/images/Tea-Plantation.jpg",
-                imageAlt: "Lush tea plantation in Sri Lanka’s highlands",
-              },
-              {
-                title: "Bentota Water Sports",
-                description:
-                  "Try beachside water activities along Sri Lanka’s western coast.",
-                image:
-                  "https://images.pexels.com/photos/10825335/pexels-photo-10825335.jpeg?auto=compress&cs=tinysrgb&w=800",
-                imageAlt: "Windsurfer on Sri Lankan coastal waters",
-              },
-              {
-                title: "Surfing in Sri Lanka",
-                description:
-                  "Catch a wave at one of Sri Lanka’s well-known surf beaches.",
-                image:
-                  "https://images.pexels.com/photos/34714740/pexels-photo-34714740.jpeg?auto=compress&cs=tinysrgb&w=800",
-                imageAlt: "Surfer walking along Weligama Beach at sunset",
-              },
-            ].map((activity) => (
+            {homeActivities.map((activity) => (
               <article
-                key={activity.title}
+                key={activity.id || activity.title}
                 className="group flex min-w-0 flex-[0_0_100%] snap-start flex-col overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-[0_14px_34px_rgba(15,23,42,0.08)] transition duration-300 ease-out motion-reduce:transition-none md:basis-[calc((100%-1.25rem)/2)] md:hover:-translate-y-1 md:hover:border-blue-200 md:hover:shadow-[0_20px_42px_rgba(37,99,235,0.15)]"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
                   <Image
-                    src={activity.image}
-                    alt={activity.imageAlt}
+                    src={activity.image_url}
+                    alt={activity.image_alt || activity.title}
                     width={800}
                     height={500}
+                    unoptimized={!isOptimizableImageUrl(activity.image_url)}
                     sizes="(max-width: 767px) 100vw, 34vw"
                     className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.04]"
                   />
@@ -519,14 +432,12 @@ export default function Home() {
                   <h3 className="text-lg font-bold leading-snug text-zinc-900 sm:text-xl">
                     {activity.title}
                   </h3>
-                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-600">
                     {activity.description}
                   </p>
                   {/* 2. book now button එක WhatsApp inquire ලින්ක් එකට වෙනස් කරන ලදී */}
                   <a
-                    href={`https://wa.me/94711114901?text=${encodeURIComponent(
-                      `Hello Chama Travels, I am interested in including "${activity.title}" in my Sri Lanka trip plan!`
-                    )}`}
+                    href={whatsappActivityLink(activity.title)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-auto inline-flex self-start pt-5 text-sm font-bold text-blue-700 underline underline-offset-4 transition hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -1001,29 +912,29 @@ export default function Home() {
           </div>
 
           <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 md:mt-10 md:auto-rows-[150px] md:grid-cols-4">
-            {galleryPhotos.map((photo, index) => (
+            {homeGalleryPhotos.map((photo, index) => (
               <figure
-                key={photo.src}
-                className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-2xl bg-slate-100 shadow-[0_10px_28px_rgba(15,23,42,0.07)] md:aspect-auto ${photo.featured ? "md:col-span-2 md:row-span-2" : ""} ${photo.wide ? "md:col-span-2" : ""}`}
+                key={photo.id || photo.image_url}
+                className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-2xl bg-slate-100 shadow-[0_10px_28px_rgba(15,23,42,0.07)] md:aspect-auto ${galleryLayoutClass(photo.layout_size)}`}
               >
                 <button
                   type="button"
-                  aria-label={`Open larger image: ${photo.alt}`}
+                  aria-label={`Open larger image: ${photo.alt_text}`}
                   onClick={() => setActiveGalleryIndex(index)}
                   className="absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                 >
                   <Image
-                    src={photo.src}
-                    alt={photo.alt}
+                    src={photo.image_url}
+                    alt={photo.alt_text}
                     width={1000}
                     height={750}
+                    unoptimized={!isOptimizableImageUrl(photo.image_url)}
                     loading="lazy"
                     sizes={
-                      photo.featured
+                      photo.layout_size === "featured" ||
+                      photo.layout_size === "wide"
                         ? "(max-width: 767px) 50vw, 50vw"
-                        : photo.wide
-                          ? "(max-width: 767px) 50vw, 50vw"
-                          : "(max-width: 767px) 50vw, 25vw"
+                        : "(max-width: 767px) 50vw, 25vw"
                     }
                     className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.03]"
                   />
@@ -1048,11 +959,11 @@ export default function Home() {
           onClick={() => setActiveGalleryIndex(null)}
           className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm transition-opacity duration-200 ease-out motion-reduce:transition-none ${galleryIsOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
         >
-          {activeGalleryIndex !== null && (
+          {activeGalleryIndex !== null && homeGalleryPhotos[activeGalleryIndex] && (
             <div
               role="dialog"
               aria-modal="true"
-              aria-label={`Gallery image: ${galleryPhotos[activeGalleryIndex].alt}`}
+              aria-label={`Gallery image: ${homeGalleryPhotos[activeGalleryIndex].alt_text}`}
               onClick={(event) => event.stopPropagation()}
               className="relative flex max-h-[90vh] max-w-[94vw] items-center justify-center"
             >
@@ -1080,10 +991,15 @@ export default function Home() {
               </button>
 
               <Image
-                src={galleryPhotos[activeGalleryIndex].src}
-                alt={galleryPhotos[activeGalleryIndex].alt}
+                src={homeGalleryPhotos[activeGalleryIndex].image_url}
+                alt={homeGalleryPhotos[activeGalleryIndex].alt_text}
                 width={1600}
                 height={1200}
+                unoptimized={
+                  !isOptimizableImageUrl(
+                    homeGalleryPhotos[activeGalleryIndex].image_url,
+                  )
+                }
                 sizes="92vw"
                 className="h-auto max-h-[82vh] w-auto max-w-[92vw] rounded-xl object-contain shadow-2xl"
               />
@@ -1095,10 +1011,10 @@ export default function Home() {
                   setActiveGalleryIndex((index) =>
                     index === null
                       ? null
-                      : Math.min(galleryPhotos.length - 1, index + 1),
+                      : Math.min(homeGalleryPhotos.length - 1, index + 1),
                   )
                 }
-                disabled={activeGalleryIndex === galleryPhotos.length - 1}
+                disabled={activeGalleryIndex === homeGalleryPhotos.length - 1}
                 className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-slate-900/65 text-2xl text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-35"
               >
                 ›

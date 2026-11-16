@@ -1,92 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
-
-const whatsappNumber = "94711114901";
-
-const activitiesData = [
-  {
-    id: "village-tour",
-    title: "Sri Lankan Village & Food Experience",
-    category: "Culture & Culinary",
-    description: "Experience authentic rural life, traditional cooking in clay pots, bullock cart rides, and boat tours through lotus lagoons. Enjoy genuine hospitality from local villagers and taste organic delicacies.",
-    image: "/images/village_tour.jpg",
-    imageAlt: "Outdoor cooking in a Sri Lankan village",
-    duration: "Half Day",
-  },
-  {
-    id: "ella-hiking",
-    title: "Ella Hiking & Mountain Adventure",
-    category: "Adventure & Nature",
-    description: "Hike through lush green tea plantations, climb Little Adam’s Peak and Ella Rock, and marvel at the breathtaking Nine Arches Bridge surrounded by misty mountains.",
-    image: "/images/Ella_adventure.JPG",
-    imageAlt: "Green hills and valleys in Ella, Sri Lanka",
-    duration: "Full Day / Multi-Day",
-  },
-  {
-    id: "yala-safari",
-    title: "Yala National Park Safari",
-    category: "Wildlife",
-    description: "Embark on an exciting 4x4 jeep safari in Sri Lanka's premier wildlife park, famed for having one of the highest leopard densities in the world, alongside elephants and sloth bears.",
-    image: "/images/yala-leopard.jpg",
-    imageAlt: "Elephants in Yala National Park",
-    duration: "3 - 4 Hours",
-  },
-  {
-    id: "udawalawe-safari",
-    title: "Udawalawe Elephant Transit Safari",
-    category: "Wildlife",
-    description: "Witness majestic wild elephant herds roaming freely across vast grasslands, plus deer, water buffaloes, and exotic bird species in their natural sanctuary.",
-    image: "/images/udawalawe.jpg",
-    imageAlt: "Sri Lankan elephant in Udawalawe National Park",
-    duration: "3 Hours",
-  },
-  {
-    id: "mirissa-whale",
-    title: "Mirissa Whale & Dolphin Watching",
-    category: "Coastal Adventure",
-    description: "Sail into the Indian Ocean from Mirissa harbor to spot magnificent blue whales, sperm whales, and playful pods of dolphins in the tropical waters.",
-    image: "/images/whale.jpg",
-    imageAlt: "Blue whale diving in the ocean near Sri Lanka",
-    duration: "4 - 5 Hours",
-  },
-  {
-    id: "kithulgala-rafting",
-    title: "Kithulgala Whitewater Rafting",
-    category: "Adventure",
-    description: "Navigate the thrilling rapids of the Kelani River surrounded by lush tropical rainforests. Perfect for adventure seekers looking for an adrenaline rush!",
-    image: "/images/kithulgala_rafting.jpg",
-    imageAlt: "Rafters navigating whitewater on a tropical river",
-    duration: "2 - 3 Hours",
-  },
-  {
-    id: "tea-plantation",
-    title: "Ceylon Tea Plantation & Factory Tour",
-    category: "Heritage & Nature",
-    description: "Walk amidst emerald tea bushes, learn about hand-picking techniques from local pluckers, and taste world-famous Ceylon tea at a historic factory.",
-    image: "/images/Tea-Plantation.jpg",
-    imageAlt: "Lush tea plantation in Sri Lanka highlands",
-    duration: "2 Hours",
-  },
-  {
-    id: "madu-river",
-    title: "Madu River Mangrove Boat Safari",
-    category: "Nature & Relaxation",
-    description: "Cruise calm river waters through dense mangrove tunnels, visit cinnamon island, and experience natural fish massage therapy in a tranquil wetland setting.",
-    image: "/images/madu_river.jpg",
-    imageAlt: "Boat travelling through calm mangrove waterways",
-    duration: "2 Hours",
-  },
-];
-
-type ActivityItem = (typeof activitiesData)[number];
+import {
+  ACTIVITY_CATEGORIES,
+  type ActivityRecord,
+  FALLBACK_ACTIVITIES,
+  isOptimizableImageUrl,
+  normalizeActivity,
+  whatsappActivityLink,
+} from "@/lib/gallery-activities";
 
 export default function ActivitiesPage() {
-  // 🔍 Popup state එක (რომელი activity එක click කර ඇත්ද යන්න သိගැනීමට)
-  const [selectedActivity, setSelectedActivity] = useState<ActivityItem | null>(null);
+  const [activities, setActivities] = useState<ActivityRecord[]>(FALLBACK_ACTIVITIES);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedActivity, setSelectedActivity] = useState<ActivityRecord | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadActivities() {
+      try {
+        const response = await fetch("/api/activities", { cache: "no-store" });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: ActivityRecord[];
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data) && result.data.length > 0) {
+          setActivities(result.data.map(normalizeActivity));
+        }
+      } catch {
+        // Keep graceful static fallback if database query fails
+      }
+    }
+    void loadActivities();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = useMemo(() => {
+    const present = new Set<string>(activities.map((a) => a.category).filter(Boolean));
+    const ordered = ACTIVITY_CATEGORIES.filter((c) => present.has(c));
+    const extras = Array.from(present).filter(
+      (c) => !(ACTIVITY_CATEGORIES as readonly string[]).includes(c),
+    );
+    return ["All", ...ordered, ...extras];
+  }, [activities]);
+
+  const visibleActivities = useMemo(() => {
+    if (selectedCategory === "All") return activities;
+    return activities.filter((a) => a.category === selectedCategory);
+  }, [activities, selectedCategory]);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -116,7 +82,7 @@ export default function ActivitiesPage() {
 
       {/* ACTIVITIES GRID */}
       <section className="px-4 py-16 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-12">
+        <div className="text-center max-w-2xl mx-auto mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
             Curated Adventures
           </p>
@@ -128,11 +94,29 @@ export default function ActivitiesPage() {
           </p>
         </div>
 
-        {/* 📐 4 Cards per row on desktop */}
+        {/* Category Filter Pills */}
+        <div className="mb-10 flex flex-wrap items-center justify-center gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(cat)}
+              className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                selectedCategory === cat
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                  : "border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* 4 Cards per row on desktop */}
         <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {activitiesData.map((act) => (
+          {visibleActivities.map((act) => (
             <article
-              key={act.id}
+              key={act.id || act.slug}
               role="button"
               tabIndex={0}
               aria-label={`View details for ${act.title}`}
@@ -147,18 +131,21 @@ export default function ActivitiesPage() {
             >
               <div className="relative aspect-[16/11] overflow-hidden bg-slate-100">
                 <Image
-                  src={act.image}
-                  alt={act.imageAlt}
+                  src={act.image_url}
+                  alt={act.image_alt || act.title}
                   fill
+                  unoptimized={!isOptimizableImageUrl(act.image_url)}
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                   className="object-cover transition duration-500 group-hover:scale-105"
                 />
                 <span className="absolute top-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-800 shadow-sm backdrop-blur-md">
                   {act.category}
                 </span>
-                <span className="absolute bottom-3 left-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
-                  ⏱️ {act.duration}
-                </span>
+                {act.duration && (
+                  <span className="absolute bottom-3 left-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+                    ⏱️ {act.duration}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-1 flex-col p-4 sm:p-5">
@@ -174,7 +161,7 @@ export default function ActivitiesPage() {
         </div>
       </section>
 
-      {/* 🔍 POPUP MODAL (කාඩ් එකක් ක්ලික් කළ විට පෙන්වන කොටස) */}
+      {/* Activity Details Popup Modal */}
       {selectedActivity && (
         <div
           onClick={() => setSelectedActivity(null)}
@@ -182,9 +169,8 @@ export default function ActivitiesPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            className="relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
           >
-            {/* ❌ Close Button */}
             <button
               type="button"
               aria-label="Close modal"
@@ -194,38 +180,72 @@ export default function ActivitiesPage() {
               ✕
             </button>
 
-            {/* Modal Image */}
             <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-100">
               <Image
-                src={selectedActivity.image}
-                alt={selectedActivity.imageAlt}
+                src={selectedActivity.image_url}
+                alt={selectedActivity.image_alt || selectedActivity.title}
                 fill
+                unoptimized={!isOptimizableImageUrl(selectedActivity.image_url)}
                 sizes="(max-width: 640px) 100vw, 600px"
                 className="object-cover"
               />
               <span className="absolute top-4 left-4 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-slate-800 shadow backdrop-blur-md">
                 {selectedActivity.category}
               </span>
-              <span className="absolute bottom-4 left-4 rounded-full bg-slate-950/80 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
-                ⏱️ {selectedActivity.duration}
-              </span>
+              {selectedActivity.duration && (
+                <span className="absolute bottom-4 left-4 rounded-full bg-slate-950/80 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
+                  ⏱️ {selectedActivity.duration}
+                </span>
+              )}
             </div>
 
-            {/* Modal Content */}
             <div className="p-6 sm:p-8">
               <h3 className="text-2xl font-bold text-slate-900">
                 {selectedActivity.title}
               </h3>
+
+              {(selectedActivity.location ||
+                selectedActivity.price_usd !== null ||
+                selectedActivity.price_lkr !== null) && (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  {selectedActivity.location && (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                      📍 {selectedActivity.location}
+                    </span>
+                  )}
+                  {selectedActivity.price_usd !== null && (
+                    <span className="rounded-full bg-blue-50 px-3 py-1 font-bold text-blue-700">
+                      From ${selectedActivity.price_usd} USD
+                    </span>
+                  )}
+                  {selectedActivity.price_lkr !== null && (
+                    <span className="rounded-full bg-blue-50 px-3 py-1 font-bold text-blue-700">
+                      LKR {selectedActivity.price_lkr.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <p className="mt-4 text-sm sm:text-base text-slate-600 leading-relaxed">
                 {selectedActivity.description}
               </p>
 
-              {/* WhatsApp Inquire Button inside Popup */}
+              {selectedActivity.highlights && selectedActivity.highlights.length > 0 && (
+                <ul className="mt-4 flex flex-wrap gap-2">
+                  {selectedActivity.highlights.map((item, idx) => (
+                    <li
+                      key={idx}
+                      className="rounded-full border border-blue-100 bg-blue-50/70 px-3 py-1 text-xs font-semibold text-blue-900"
+                    >
+                      ✓ {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="mt-8">
                 <a
-                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-                    `Hello Chama Travels, I am interested in including "${selectedActivity.title}" in my Sri Lanka trip plan!`
-                  )}`}
+                  href={whatsappActivityLink(selectedActivity.title)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex w-full items-center justify-center rounded-2xl bg-green-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-green-600/30 transition hover:bg-green-700"
@@ -237,7 +257,8 @@ export default function ActivitiesPage() {
           </div>
         </div>
       )}
-{/* Floating WhatsApp Quick Action Button */}
+
+      {/* Floating WhatsApp Quick Action Button */}
       <a
         href="https://wa.me/94711114901?text=Hello%20Chama%20Travels%2C%20I%20am%20browsing%20your%20tours%20page%20and%20would%20like%20to%20inquire."
         target="_blank"

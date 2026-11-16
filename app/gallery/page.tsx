@@ -1,43 +1,81 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-
-// 📸 සියලුම ඡායාරූප ලැයිස්තුව (මෙම පිටුවට අවශ්‍ය වැඩිපුර photos ද මෙහි එකතු කළ හැක)
-const allGalleryPhotos = [
-  { src: "/images/1307254.jpg", alt: "Chama Travels Journey 1" },
-  { src: "/images/beach.jpg", alt: "Sri Lanka Beach Tour" },
-  { src: "/images/2024_03_30_11_21_19_IMG_1200.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_07_26_21_27_56_47FA4CFD-FCDD-4AC3-94BF-AC5FD4CE820F.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_10_12_15_22_52_IMG_3436.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_11_06_10_35_25_IMG_3959.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_11_07_00_48_21_IMG_4030.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_11_28_09_44_28_IMG_4455.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_11_30_06_50_30_IMG_4470.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2024_12_18_10_08_44_IMG_4962.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_05_27_10_49_29_IMG_9935.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_07_23_06_19_23_IMG_0757.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_09_06_13_09_56_IMG_2081.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_10_01_10_59_58_IMG_2604(1).jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_10_10_12_45_43_IMG_2800.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2025_10_11_08_51_11_IMG_2829.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2026_01_11_18_33_10_IMG_5149.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2026_02_27_10_52_34_IMG_5805.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/2026_03_05_17_43_47_IMG_5910.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/1307254.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/aboutimage.jpg", alt: "About Chama Travels" },
-  { src: "/images/beach.jpg", alt: "Sri Lanka Beach Tour" },
-  { src: "/images/WhatsApp Image 2024-12-29 at 13.02.42_b9b4dbaa.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/WhatsApp Image 2024-12-29 at 13.03.27_9da2629c.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/WhatsApp Image 2024-12-29 at 13.05.37_9e691c01.jpg", alt: "Chama Travels Tour" },
-  { src: "/images/WhatsApp Image 2024-12-29 at 13.05.48_c650a197.jpg", alt: "Chama Travels Tour" },
-  // අවශ්‍ය නම් තවත් photos මෙහි එකතු කරන්න:
-  // { src: "/images/photo3.jpg", alt: "Description 3" },
-];
+import {
+  FALLBACK_GALLERY_PHOTOS,
+  GALLERY_CATEGORIES,
+  type GalleryPhotoRecord,
+  isOptimizableImageUrl,
+  normalizeGalleryPhoto,
+} from "@/lib/gallery-activities";
 
 export default function GalleryPage() {
+  const [photos, setPhotos] = useState<GalleryPhotoRecord[]>(FALLBACK_GALLERY_PHOTOS);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(null);
   const galleryIsOpen = activeGalleryIndex !== null;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGallery() {
+      try {
+        const response = await fetch("/api/gallery", { cache: "no-store" });
+        const result = (await response.json()) as {
+          success?: boolean;
+          data?: GalleryPhotoRecord[];
+        };
+        if (!cancelled && response.ok && result.success && Array.isArray(result.data) && result.data.length > 0) {
+          setPhotos(result.data.map(normalizeGalleryPhoto));
+        }
+      } catch {
+        // Keep graceful static fallback if database query fails
+      }
+    }
+    void loadGallery();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = useMemo(() => {
+    const present = new Set<string>(photos.map((p) => p.category).filter(Boolean));
+    const ordered = GALLERY_CATEGORIES.filter((c) => present.has(c));
+    const extras = Array.from(present).filter(
+      (c) => !(GALLERY_CATEGORIES as readonly string[]).includes(c),
+    );
+    return ["All", ...ordered, ...extras];
+  }, [photos]);
+
+  const visiblePhotos = useMemo(() => {
+    if (selectedCategory === "All") return photos;
+    return photos.filter((p) => p.category === selectedCategory);
+  }, [photos, selectedCategory]);
+
+  useEffect(() => {
+    if (!galleryIsOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveGalleryIndex(null);
+      } else if (event.key === "ArrowLeft") {
+        setActiveGalleryIndex((idx) => (idx === null ? null : Math.max(0, idx - 1)));
+      } else if (event.key === "ArrowRight") {
+        setActiveGalleryIndex((idx) =>
+          idx === null ? null : Math.min(visiblePhotos.length - 1, idx + 1),
+        );
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [galleryIsOpen, visiblePhotos.length]);
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col justify-between py-16 px-4 sm:px-6 lg:px-8">
@@ -54,14 +92,35 @@ export default function GalleryPage() {
           </p>
         </div>
 
-        {/* Photos Grid (Click කළ විට Popup විවෘත වේ) */}
-        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {allGalleryPhotos.map((photo, index) => (
+        {/* Category Filter Pills */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => {
+                setSelectedCategory(cat);
+                setActiveGalleryIndex(null);
+              }}
+              className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                selectedCategory === cat
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                  : "border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Photos Grid */}
+        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {visiblePhotos.map((photo, index) => (
             <div
-              key={index}
+              key={photo.id || `${photo.image_url}-${index}`}
               role="button"
               tabIndex={0}
-              aria-label={`View photo ${index + 1}: ${photo.alt}`}
+              aria-label={`View photo ${index + 1}: ${photo.alt_text}`}
               onClick={() => setActiveGalleryIndex(index)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
@@ -73,20 +132,26 @@ export default function GalleryPage() {
             >
               <div className="h-72 w-full overflow-hidden">
                 <Image
-                  src={photo.src}
-                  alt={photo.alt}
+                  src={photo.image_url}
+                  alt={photo.alt_text}
                   width={800}
                   height={600}
+                  unoptimized={!isOptimizableImageUrl(photo.image_url)}
                   priority={index === 0}
                   className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                 />
               </div>
+              {photo.title && (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/25 to-transparent px-4 py-3 opacity-0 transition duration-300 group-hover:opacity-100">
+                  <p className="text-sm font-bold text-white">{photo.title}</p>
+                </div>
+              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* 🔙 Back to Home Button (තිරයේ පහළම කොටසට නිසි ලෙස සකසා ඇත) */}
+      {/* Back to Home Button */}
       <div className="mt-16 mb-8 text-center w-full">
         <Link
           href="/"
@@ -96,8 +161,8 @@ export default function GalleryPage() {
         </Link>
       </div>
 
-      {/* 🔍 POPUP / LIGHTBOX MODAL */}
-      {galleryIsOpen && activeGalleryIndex !== null && (
+      {/* Lightbox Modal */}
+      {galleryIsOpen && activeGalleryIndex !== null && visiblePhotos[activeGalleryIndex] && (
         <div
           onClick={() => setActiveGalleryIndex(null)}
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
@@ -106,7 +171,6 @@ export default function GalleryPage() {
             onClick={(event) => event.stopPropagation()}
             className="relative flex max-h-[90vh] max-w-[94vw] items-center justify-center"
           >
-            {/* ❌ Close Button */}
             <button
               type="button"
               aria-label="Close image preview"
@@ -116,7 +180,6 @@ export default function GalleryPage() {
               ✕
             </button>
 
-            {/* 👈 Previous Arrow */}
             <button
               type="button"
               aria-label="Previous image"
@@ -131,16 +194,15 @@ export default function GalleryPage() {
               ‹
             </button>
 
-            {/* Popup Image */}
             <Image
-              src={allGalleryPhotos[activeGalleryIndex].src}
-              alt={allGalleryPhotos[activeGalleryIndex].alt}
+              src={visiblePhotos[activeGalleryIndex].image_url}
+              alt={visiblePhotos[activeGalleryIndex].alt_text}
               width={1200}
               height={900}
+              unoptimized={!isOptimizableImageUrl(visiblePhotos[activeGalleryIndex].image_url)}
               className="h-auto max-h-[82vh] w-auto max-w-[90vw] rounded-lg object-contain shadow-2xl"
             />
 
-            {/* 👉 Next Arrow */}
             <button
               type="button"
               aria-label="Next image"
@@ -148,10 +210,10 @@ export default function GalleryPage() {
                 setActiveGalleryIndex((index) =>
                   index === null
                     ? null
-                    : Math.min(allGalleryPhotos.length - 1, index + 1),
+                    : Math.min(visiblePhotos.length - 1, index + 1),
                 )
               }
-              disabled={activeGalleryIndex === allGalleryPhotos.length - 1}
+              disabled={activeGalleryIndex === visiblePhotos.length - 1}
               className="absolute right-2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-slate-900/80 text-xl text-white shadow transition hover:bg-slate-800 disabled:opacity-30"
             >
               ›
