@@ -3,41 +3,14 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import Destinations from "./components/Destinations";
 import Footer from "./components/Footer";
+import TourModal from "./tours/components/TourModal";
 import ToursNavbar from "./tours/components/ToursNavbar";
+import { mapRowToTour, PublicTourPackageRow, toursData } from "./tours/toursData";
+import type { Tour } from "./tours/types";
 
 const whatsappNumber = "94711114901";
 
-type FeaturedTourItem = {
-  id?: string;
-  title: string;
-  days: string;
-  image: string;
-  imageAlt: string;
-};
-
-const fallbackFeaturedTours: FeaturedTourItem[] = [
-  {
-    title: "Highlights of Sri Lanka",
-    days: "8 Days / 7 Nights",
-    image:
-      "/images/Seema-Malaka-Temple-colombo-sri-lanka.jpg",
-    imageAlt: "Sigiriya Rock Fortress rising above Sri Lankan forest at sunrise",
-  },
-  {
-    title: "Southern Coastal Escape",
-    days: "10 Days / 9 Nights",
-    image:
-      "/images/beach.jpg",
-    imageAlt: "Palm-lined Mirissa beach on Sri Lanka's southern coast",
-  },
-  {
-    title: "Scenic Sri Lanka Escape",
-    days: "7 Days / 6 Nights",
-    image:
-      "/images/Ella_adventure.JPG",
-    imageAlt: "Nine Arches Bridge surrounded by Ella's green highlands",
-  },
-];
+const fallbackFeaturedTours: Tour[] = toursData.slice(0, 3);
 
 function isOptimizableImageUrl(src: string): boolean {
   if (src.startsWith("/")) return true;
@@ -139,9 +112,10 @@ const galleryPhotos = [
 ];
 
 export default function Home() {
-  const [featuredTours, setFeaturedTours] = useState<FeaturedTourItem[]>(
+  const [featuredTours, setFeaturedTours] = useState<Tour[]>(
     fallbackFeaturedTours,
   );
+  const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [activeTourIndex, setActiveTourIndex] = useState(0);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
     null,
@@ -161,24 +135,11 @@ export default function Home() {
         });
         const result = (await response.json()) as {
           success?: boolean;
-          data?: Array<{
-            id: string;
-            title: string;
-            duration: string;
-            image_url: string;
-          }>;
+          data?: PublicTourPackageRow[];
         };
         if (!cancelled && response.ok && result.success && Array.isArray(result.data)) {
           if (result.data.length > 0) {
-            setFeaturedTours(
-              result.data.map((pkg) => ({
-                id: pkg.id,
-                title: pkg.title,
-                days: pkg.duration,
-                image: pkg.image_url,
-                imageAlt: `${pkg.title} - Chama Travels Sri Lanka`,
-              }))
-            );
+            setFeaturedTours(result.data.map(mapRowToTour));
           }
         }
       } catch {
@@ -244,17 +205,10 @@ export default function Home() {
 
     const gap = Number.parseFloat(getComputedStyle(carousel).columnGap) || 0;
     const step = firstCard.getBoundingClientRect().width + gap;
-    const maxIndex = Math.max(
-      0,
-      Math.round((carousel.scrollWidth - carousel.clientWidth) / step),
-    );
-    const nextIndex = Math.max(
-      0,
-      Math.min(maxIndex, activeTourIndex + direction),
-    );
-
-    setActiveTourIndex(nextIndex);
-    carousel.scrollTo({ left: nextIndex * step, behavior: "smooth" });
+    carousel.scrollBy({
+      left: direction * step,
+      behavior: "smooth",
+    });
   };
 
   const updateActiveTour = () => {
@@ -265,7 +219,7 @@ export default function Home() {
     const gap = Number.parseFloat(getComputedStyle(carousel).columnGap) || 0;
     const step = firstCard.getBoundingClientRect().width + gap;
     const index = Math.round(carousel.scrollLeft / step);
-    setActiveTourIndex(Math.min(featuredTours.length - 1, index));
+    setActiveTourIndex(Math.max(0, Math.min(featuredTours.length - 1, index)));
   };
 
   const scrollActivities = (direction: -1 | 1) => {
@@ -639,15 +593,23 @@ export default function Home() {
                   moveTour(event.key === "ArrowLeft" ? -1 : 1);
                 }
               }}
-              className="flex snap-x snap-mandatory items-stretch gap-6 overflow-x-auto overscroll-x-contain py-3 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4 md:overflow-x-hidden md:snap-none"
+              className="flex snap-x snap-mandatory items-stretch gap-6 overflow-x-auto overscroll-x-contain px-1 py-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4"
             >
               {featuredTours.map((tour, index) => (
                 <article
-                  key={tour.title}
-                  role="group"
+                  key={tour.id || tour.title}
+                  role="button"
+                  tabIndex={0}
                   aria-roledescription="slide"
-                  aria-label={`Tour ${index + 1} of ${featuredTours.length}: ${tour.title}`}
-                  className="group flex min-h-[390px] min-w-0 flex-[0_0_100%] flex-col snap-start overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_14px_36px_rgba(15,23,42,0.08)] transition duration-300 ease-out motion-reduce:transition-none md:basis-[calc((100%-3rem)/3)] md:hover:-translate-y-1 md:hover:border-blue-200 md:hover:shadow-[0_20px_45px_rgba(37,99,235,0.14)]"
+                  aria-label={`View itinerary and details for ${tour.title} (${index + 1} of ${featuredTours.length})`}
+                  onClick={() => setSelectedTour(tour)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedTour(tour);
+                    }
+                  }}
+                  className="group flex min-h-[410px] min-w-0 flex-[0_0_100%] cursor-pointer flex-col snap-start overflow-hidden rounded-3xl border border-blue-100/80 bg-white/95 shadow-[0_14px_36px_rgba(15,23,42,0.08)] transition duration-300 ease-out motion-reduce:transition-none md:basis-[calc((100%-1.5rem)/2)] lg:basis-[calc((100%-3rem)/3)] md:hover:-translate-y-1.5 md:hover:border-blue-300 md:hover:shadow-[0_22px_48px_rgba(37,99,235,0.16)]"
                 >
                   <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
                     <Image
@@ -657,62 +619,83 @@ export default function Home() {
                       height={625}
                       unoptimized={!isOptimizableImageUrl(tour.image)}
                       loading={index === 0 ? "eager" : "lazy"}
-                      sizes="(max-width: 767px) 100vw, (max-width: 1279px) 33vw, 25vw"
-                      className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.03]"
+                      sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 33vw"
+                      className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.04]"
                     />
                     <div
                       aria-hidden="true"
-                      className="absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent"
+                      className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent"
                     />
+                    {tour.startingPriceUSD > 0 && (
+                      <span className="absolute bottom-3 right-3 rounded-full bg-blue-600/95 px-3 py-1 text-xs font-extrabold text-white shadow-md backdrop-blur-xs">
+                        From ${tour.startingPriceUSD} USD
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex flex-1 flex-col bg-white/90 p-6 backdrop-blur-sm sm:p-7">
+                  <div className="flex flex-1 flex-col bg-white/95 p-6 backdrop-blur-sm sm:p-7">
                     <p className="text-sm font-bold text-blue-700">
-                      {tour.days}
+                      {tour.duration}
                     </p>
 
-                    <h3 className="mt-2 min-h-[3.5rem] text-2xl font-bold leading-tight text-zinc-900">
+                    <h3 className="mt-2 min-h-[3.5rem] text-2xl font-bold leading-tight text-zinc-900 transition-colors group-hover:text-blue-600">
                       {tour.title}
                     </h3>
 
-                    <a
-                      href={`https://wa.me/${whatsappNumber}?text=Hello%20Chama%20Travels%2C%20I%20am%20interested%20in%20the%20${encodeURIComponent(
-                        tour.title,
-                      )}.`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-auto inline-flex self-start pt-5 font-bold text-blue-700 underline underline-offset-4 transition hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    >
-                      Enquire Now →
-                    </a>
+                    {tour.shortDescription && (
+                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-zinc-600 sm:text-sm">
+                        {tour.shortDescription}
+                      </p>
+                    )}
+
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTour(tour);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"
+                      >
+                        View Details &amp; Itinerary →
+                      </button>
+
+                      <a
+                        href={`https://wa.me/${whatsappNumber}?text=Hello%20Chama%20Travels%2C%20I%20am%20interested%20in%20the%20${encodeURIComponent(
+                          tour.title,
+                        )}.`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs font-bold text-blue-700 underline underline-offset-4 transition hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm"
+                      >
+                        Enquire Now →
+                      </a>
+                    </div>
                   </div>
                 </article>
               ))}
             </div>
 
-            <div className="pointer-events-none absolute inset-x-2 top-[calc(31.25cqw-10px)] z-10 flex items-center justify-between md:hidden">
-              <p className="sr-only" aria-live="polite">
-                Tour {activeTourIndex + 1} of {featuredTours.length}
-              </p>
-              <button
-                type="button"
-                aria-label="Previous tour"
-                onClick={() => moveTour(-1)}
-                disabled={activeTourIndex === 0}
-                className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border border-blue-200/80 bg-white/85 text-3xl leading-none text-blue-700 shadow-md shadow-blue-950/5 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                aria-label="Next tour"
-                onClick={() => moveTour(1)}
-                disabled={activeTourIndex === featuredTours.length - 1}
-                className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border border-blue-200/80 bg-white/85 text-3xl leading-none text-blue-700 shadow-md shadow-blue-950/5 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0"
-              >
-                ›
-              </button>
-            </div>
+            <p className="sr-only" aria-live="polite">
+              Tour {activeTourIndex + 1} of {featuredTours.length}
+            </p>
+            <button
+              type="button"
+              aria-label="Previous tour"
+              onClick={() => moveTour(-1)}
+              className="absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-blue-200/80 bg-white/90 text-2xl leading-none text-blue-900 shadow-[0_8px_20px_rgba(0,0,0,0.12)] backdrop-blur-md transition hover:-translate-y-1 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              aria-label="Next tour"
+              onClick={() => moveTour(1)}
+              className="absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-blue-200/80 bg-white/90 text-2xl leading-none text-blue-900 shadow-[0_8px_20px_rgba(0,0,0,0.12)] backdrop-blur-md transition hover:-translate-y-1 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              ›
+            </button>
           </div>
 
           <a
@@ -1195,6 +1178,14 @@ export default function Home() {
         <span className="hidden sm:inline">WhatsApp Inquiries</span>
         <span className="sm:hidden">Chat</span>
       </a>
+      {/* Detailed Tour Modal for Featured Tours */}
+      <TourModal
+        key={selectedTour?.id || "home-tour-modal"}
+        tour={selectedTour}
+        isOpen={selectedTour !== null}
+        onClose={() => setSelectedTour(null)}
+      />
+
       {/* ================= FOOTER ================= */}
       <Footer />
     </main>
