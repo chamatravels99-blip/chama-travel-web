@@ -3,6 +3,12 @@ import { authorizationResponse, isSameOriginRequest, requireRoles } from '@/lib/
 import { parseAdminCustomerPaymentInput } from '@/lib/admin-customer-payment';
 import { renderAndStoreBillingDocument } from '@/lib/server/documents';
 import { createServiceClient } from '@/lib/server/service-client';
+import {
+  getGoogleCalendarConfig,
+  isGoogleCalendarConfigured,
+  syncBookingToGoogleCalendar,
+} from '@/lib/google-calendar';
+import { deriveCustomerNormalizedKey } from '@/lib/admin-customers';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MISSING_END_TIME_ERROR = 'Enter the expected end time for every booking leg before issuing a quote';
@@ -198,6 +204,8 @@ export async function GET(request: Request) {
       };
     });
 
+    const calendarConfig = getGoogleCalendarConfig();
+
     return NextResponse.json({
       success: true,
       data: {
@@ -207,6 +215,10 @@ export async function GET(request: Request) {
           vehicles: vehiclesList,
         },
         guest_tracker_states: guestTrackerStates.data ?? [],
+        google_calendar: {
+          configured: calendarConfig.configured,
+          calendar_id: calendarConfig.calendarId,
+        },
       },
       roles,
     }, { headers: { 'Cache-Control': 'no-store' } });
@@ -232,6 +244,404 @@ export async function POST(request: Request) {
     }
 
     const input = body as Record<string, unknown>;
+
+    if (input.action === 'create_manual_booking') {
+      if (!roles.some((role) => ['admin', 'super_admin'].includes(role))) {
+        return NextResponse.json(
+          { success: false, error: 'Only an Admin can create a manual booking.' },
+          { status: 403 }
+        );
+      }
+
+      const bookingSourceRaw = typeof input.booking_source === 'string' ? input.booking_source.trim() : 'WhatsApp';
+      const allowedSources = ['WhatsApp', 'Phone Call', 'Walk-in', 'Email', 'Partner/Agent'];
+      const bookingSource = allowedSources.includes(bookingSourceRaw) ? bookingSourceRaw : 'WhatsApp';
+
+      const customerName = typeof input.customer_name === 'string' ? input.customer_name.trim() : '';
+      const customerPhone = typeof input.customer_phone === 'string' ? input.customer_phone.trim() : '';
+      const rawEmail = typeof input.customer_email === 'string' ? input.customer_email.trim().toLowerCase() : '';
+      const customerCountry = typeof input.customer_country === 'string' ? input.customer_country.trim() : '';
+
+      const phoneDigits = customerPhone.replace(/[^0-9]/g, '');
+      if (customerName.length < 2 || customerName.length > 120) {
+        return NextResponse.json(
+          { success: false, error: 'Customer full name must be between 2 and 120 characters.' },
+          { status: 400 }
+        );
+      }
+      if (
+        customerPhone.length < 7 ||
+        customerPhone.length > 30 ||
+        !/^\+?[0-9\s()-]+$/.test(customerPhone) ||
+        phoneDigits.length < 7 ||
+        phoneDigits.length > 15
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Enter a valid customer phone or WhatsApp number (7–15 digits).' },
+          { status: 400 }
+        );
+      }
+
+      const customerEmail =
+        rawEmail.length > 0
+          ? rawEmail
+          : `guest-${phoneDigits}@guest.chamatravels.com`;
+
+      if (
+        customerEmail.length > 254 ||
+        !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(customerEmail)
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Enter a valid customer email address or leave it blank.' },
+          { status: 400 }
+        );
+      }
+
+      const rawServiceLabel = typeof input.service_type === 'string' ? input.service_type.trim() : 'Airport Pickup';
+      const serviceMapping: Record<string, { dbType: string; title: string }> = {
+        'Airport Pickup': { dbType: 'airport_transfer', title: 'Airport Pickup' },
+        'Airport Drop': { dbType: 'airport_transfer', title: 'Airport Drop' },
+        'Chauffeur Tour': { dbType: 'round_tour', title: 'Chauffeur Tour' },
+        'Day Trip': { dbType: 'day_trip', title: 'Day Trip' },
+        'Point-to-Point Transfer': { dbType: 'vehicle_hire', title: 'Point-to-Point Transfer' },
+        airport_transfer: { dbType: 'airport_transfer', title: 'Airport Transfer' },
+        day_trip: { dbType: 'day_trip', title: 'Day Trip' },
+        round_tour: { dbType: 'round_tour', title: 'Chauffeur Tour' },
+        vehicle_hire: { dbType: 'vehicle_hire', title: 'Point-to-Point Transfer' },
+        custom: { dbType: 'custom', title: 'Custom Journey' },
+      };
+      const resolvedService = serviceMapping[rawServiceLabel] ?? {
+        dbType: 'airport_transfer',
+        title: rawServiceLabel || 'Airport Pickup',
+      };
+
+      const pickupLocation = typeof input.pickup_location === 'string' ? input.pickup_location.trim() : '';
+      const dropoffLocation = typeof input.dropoff_location === 'string' ? input.dropoff_location.trim() : '';
+      if (
+        pickupLocation.length < 2 ||
+        pickupLocation.length > 200 ||
+        dropoffLocation.length < 2 ||
+        dropoffLocation.length > 200
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Enter valid pickup and drop-off locations (2–200 characters).' },
+          { status: 400 }
+        );
+      }
+
+      const pickupAtRaw = typeof input.pickup_at === 'string' ? input.pickup_at.trim() : '';
+      if (!pickupAtRaw || !hasExplicitTimezone(pickupAtRaw) || Number.isNaN(Date.parse(pickupAtRaw))) {
+        return NextResponse.json(
+          { success: false, error: 'Enter a valid pickup date and time.' },
+          { status: 400 }
+        );
+      }
+      const pickupDate = new Date(pickupAtRaw);
+
+      const plannedEndRaw = typeof input.planned_end_at === 'string' ? input.planned_end_at.trim() : '';
+      let plannedEndIso: string;
+      if (plannedEndRaw) {
+        if (!hasExplicitTimezone(plannedEndRaw) || Number.isNaN(Date.parse(plannedEndRaw))) {
+          return NextResponse.json(
+            { success: false, error: 'Enter a valid return / end date and time.' },
+            { status: 400 }
+          );
+        }
+        const parsedEnd = new Date(plannedEndRaw);
+        if (parsedEnd.getTime() <= pickupDate.getTime()) {
+          return NextResponse.json(
+            { success: false, error: 'Return / end time must be after the pickup time.' },
+            { status: 400 }
+          );
+        }
+        plannedEndIso = parsedEnd.toISOString();
+      } else {
+        // Default expected end time to pickup + 4 hours so quote issuance works out of the box
+        plannedEndIso = new Date(pickupDate.getTime() + 4 * 60 * 60 * 1000).toISOString();
+      }
+
+      const passengerCount = Number(input.passenger_count ?? 2);
+      const luggageCount = Number(input.luggage_count ?? 2);
+      if (
+        !Number.isInteger(passengerCount) ||
+        passengerCount < 1 ||
+        passengerCount > 14 ||
+        !Number.isInteger(luggageCount) ||
+        luggageCount < 0 ||
+        luggageCount > 14
+      ) {
+        return NextResponse.json(
+          { success: false, error: 'Passengers must be 1–14 and luggage must be 0–14.' },
+          { status: 400 }
+        );
+      }
+
+      const categoryCode =
+        typeof input.category_code === 'string' && input.category_code.trim()
+          ? input.category_code.trim().toLowerCase()
+          : 'sedan';
+      const flightNumber =
+        typeof input.flight_number === 'string' ? input.flight_number.trim().slice(0, 20) : '';
+      const specialNotes =
+        typeof input.special_notes === 'string' ? input.special_notes.trim() : '';
+
+      const currency =
+        typeof input.currency === 'string' && ['LKR', 'USD'].includes(input.currency.toUpperCase())
+          ? input.currency.toUpperCase()
+          : 'LKR';
+
+      const autoConfirm = Boolean(input.auto_confirm);
+      const agreedAmount = autoConfirm ? parseAmount(input.agreed_amount) : null;
+      if (autoConfirm && agreedAmount === null) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Enter a valid agreed price amount (greater than 0) to auto-confirm the booking.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const noteSegments = [
+        `Booking title: ${resolvedService.title}`,
+        `Booking source: ${bookingSource}`,
+        ...(customerCountry ? [`Country: ${customerCountry}`] : []),
+        ...(flightNumber ? [`Flight No: ${flightNumber}`] : []),
+        ...(specialNotes ? [`Notes: ${specialNotes}`] : []),
+      ];
+      const combinedCustomerNotes = noteSegments.join('\n').slice(0, 1000);
+
+      const idempotencyKey =
+        typeof input.idempotency_key === 'string' && UUID_PATTERN.test(input.idempotency_key)
+          ? input.idempotency_key
+          : globalThis.crypto.randomUUID();
+
+      const legsPayload = [
+        {
+          pickup_location: pickupLocation,
+          dropoff_location: dropoffLocation,
+          pickup_at: pickupDate.toISOString(),
+          planned_end_at: plannedEndIso,
+          flight_number: flightNumber || null,
+          trip_notes: specialNotes ? specialNotes.slice(0, 950) : null,
+        },
+      ];
+
+      const { data: createdRows, error: createErr } = await supabase.rpc(
+        'admin_create_manual_booking',
+        {
+          p_customer_name: customerName,
+          p_customer_email: customerEmail,
+          p_customer_phone: customerPhone,
+          p_service_type: resolvedService.dbType,
+          p_journey_type: 'one_way',
+          p_category_code: categoryCode,
+          p_passenger_count: passengerCount,
+          p_luggage_count: luggageCount,
+          p_customer_notes: combinedCustomerNotes,
+          p_requested_currency: currency,
+          p_idempotency_key: idempotencyKey,
+          p_legs: legsPayload,
+        }
+      );
+
+      if (createErr) {
+        console.error('Admin manual booking creation failed:', createErr.code, createErr.message);
+        return NextResponse.json(
+          {
+            success: false,
+            error: createErr.message || 'Manual booking could not be created. Check all fields.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const created = Array.isArray(createdRows) ? createdRows[0] : createdRows;
+      const bookingId = created?.booking_id as string | undefined;
+      const bookingRef = created?.booking_ref as string | undefined;
+      if (!bookingId) {
+        return NextResponse.json(
+          { success: false, error: 'Manual booking did not return a valid booking ID.' },
+          { status: 500 }
+        );
+      }
+
+      // Best-effort CRM profile enrichment (non-blocking)
+      try {
+        const normalizedKey = deriveCustomerNormalizedKey({
+          email: rawEmail || null,
+          phone: customerPhone,
+          whatsapp: customerPhone,
+        });
+        if (normalizedKey) {
+          await supabase.from('customer_crm_profiles').upsert(
+            {
+              normalized_key: normalizedKey,
+              full_name: customerName,
+              email: rawEmail || null,
+              phone: customerPhone,
+              whatsapp: customerPhone,
+              ...(customerCountry ? { country: customerCountry } : {}),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'normalized_key' }
+          );
+        }
+      } catch {
+        // Non-blocking CRM sync
+      }
+
+      let autoConfirmed = false;
+      let calendarSync = null;
+
+      if (autoConfirm && agreedAmount !== null) {
+        const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        const quoteRes = await supabase.rpc('issue_manual_booking_quote', {
+          p_booking_id: bookingId,
+          p_currency: currency,
+          p_expires_at: expiresAt,
+          p_amount: agreedAmount,
+        });
+
+        const quoteRow = Array.isArray(quoteRes.data) ? quoteRes.data[0] : quoteRes.data;
+        const issuedQuoteId =
+          quoteRow && typeof quoteRow === 'object' && 'quote_id' in quoteRow
+            ? (quoteRow.quote_id as string)
+            : null;
+
+        if (!quoteRes.error && issuedQuoteId) {
+          const confirmRes = await supabase.rpc('admin_record_whatsapp_quote_acceptance', {
+            p_quote_id: issuedQuoteId,
+          });
+          if (!confirmRes.error) {
+            autoConfirmed = true;
+            calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+          }
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            booking_id: bookingId,
+            booking_ref: bookingRef,
+            auto_confirmed: autoConfirmed,
+            calendar_sync: calendarSync,
+          },
+          message: autoConfirmed
+            ? `Manual booking ${bookingRef} created, confirmed (${currency} ${agreedAmount}), and queued for calendar sync.`
+            : `Manual booking ${bookingRef} created successfully.`,
+        },
+        { status: 201 }
+      );
+    }
+
+    if (input.action === 'sync_google_calendar') {
+      if (!roles.some((role) => ['admin', 'super_admin'].includes(role))) {
+        return NextResponse.json(
+          { success: false, error: 'Only an Admin can trigger Google Calendar sync.' },
+          { status: 403 }
+        );
+      }
+      const bookingId = typeof input.booking_id === 'string' ? input.booking_id : '';
+      if (!UUID_PATTERN.test(bookingId)) {
+        return NextResponse.json({ success: false, error: 'Booking details are invalid.' }, { status: 400 });
+      }
+      const syncResult = await syncBookingToGoogleCalendar({ bookingId, force: true }, supabase);
+      if (!syncResult.configured) {
+        return NextResponse.json({
+          success: false,
+          configured: false,
+          data: syncResult,
+          error:
+            'Google Calendar credentials are not configured yet. Add GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_CALENDAR_ID to enable live sync.',
+        });
+      }
+      if (!syncResult.synced) {
+        return NextResponse.json(
+          {
+            success: false,
+            configured: true,
+            data: syncResult,
+            error: syncResult.error || 'Google Calendar sync failed.',
+          },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        configured: true,
+        data: syncResult,
+        message:
+          syncResult.action === 'deleted'
+            ? 'Cancelled booking removed from Google Calendar.'
+            : 'Booking synced to Google Calendar.',
+      });
+    }
+
+    if (input.action === 'sync_all_google_calendar') {
+      if (!roles.some((role) => ['admin', 'super_admin'].includes(role))) {
+        return NextResponse.json(
+          { success: false, error: 'Only an Admin can trigger bulk Google Calendar sync.' },
+          { status: 403 }
+        );
+      }
+      if (!isGoogleCalendarConfigured()) {
+        return NextResponse.json({
+          success: false,
+          configured: false,
+          error:
+            'Google Calendar credentials are not configured yet. Add GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_CALENDAR_ID to enable live sync.',
+        });
+      }
+
+      const listRes = await supabase.rpc('list_operations_bookings');
+      if (listRes.error) {
+        return NextResponse.json(
+          { success: false, error: 'Bookings could not be loaded for bulk sync.' },
+          { status: 503 }
+        );
+      }
+
+      const allBookings = Array.isArray(listRes.data)
+        ? (listRes.data as Array<{ id: string; booking_status: string; google_calendar_event_id?: string | null }>)
+        : [];
+      const syncTargets = allBookings.filter(
+        (b) =>
+          ['confirmed', 'assigned', 'in_progress', 'completed'].includes(b.booking_status) ||
+          (['cancelled', 'rejected'].includes(b.booking_status) && Boolean(b.google_calendar_event_id))
+      );
+
+      let syncedCount = 0;
+      let failedCount = 0;
+      let lastError: string | undefined;
+
+      for (const target of syncTargets) {
+        const res = await syncBookingToGoogleCalendar(target.id, supabase);
+        if (res.synced) {
+          syncedCount += 1;
+        } else {
+          failedCount += 1;
+          if (res.error) lastError = res.error;
+        }
+      }
+
+      return NextResponse.json({
+        success: failedCount === 0 || syncedCount > 0,
+        configured: true,
+        data: {
+          total_targets: syncTargets.length,
+          synced_count: syncedCount,
+          failed_count: failedCount,
+          last_error: lastError ?? null,
+        },
+        message:
+          failedCount === 0
+            ? `Synced ${syncedCount} active booking${syncedCount === 1 ? '' : 's'} to Google Calendar.`
+            : `Synced ${syncedCount} booking(s); ${failedCount} failed (${lastError ?? 'check sync errors'}).`,
+      });
+    }
     if (input.action === 'revoke_guest_booking_tracker') {
       if (!roles.some((role) => ['admin', 'super_admin'].includes(role))) {
         return NextResponse.json(
@@ -297,7 +707,8 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
-      return NextResponse.json({ success: true });
+      const calendarSync = await syncBookingToGoogleCalendar({ quoteId }, supabase);
+      return NextResponse.json({ success: true, calendar_sync: calendarSync });
     }
 
     if (input.action === 'revoke_guest_quote_link') {
@@ -467,7 +878,8 @@ export async function POST(request: Request) {
           { status: 409 }
         );
       }
-      return NextResponse.json({ success: true, data: { assignment_id: data } }, { status: 201 });
+      const calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+      return NextResponse.json({ success: true, data: { assignment_id: data }, calendar_sync: calendarSync }, { status: 201 });
     }
 
     if (input.action === 'release_assignment') {
@@ -515,7 +927,12 @@ export async function POST(request: Request) {
         }
       }
 
-      return NextResponse.json({ success: true, message: 'Driver assignment released and booking returned to confirmed.' });
+      const calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+      return NextResponse.json({
+        success: true,
+        message: 'Driver assignment released and booking returned to confirmed.',
+        calendar_sync: calendarSync,
+      });
     }
 
     if (input.action === 'start_trip') {
@@ -550,7 +967,12 @@ export async function POST(request: Request) {
         }
       }
 
-      return NextResponse.json({ success: true, message: 'Trip is now in progress.' });
+      const calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+      return NextResponse.json({
+        success: true,
+        message: 'Trip is now in progress.',
+        calendar_sync: calendarSync,
+      });
     }
 
     if (input.action === 'complete_trip') {
@@ -585,7 +1007,12 @@ export async function POST(request: Request) {
         }
       }
 
-      return NextResponse.json({ success: true, message: 'Trip completed successfully.' });
+      const calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+      return NextResponse.json({
+        success: true,
+        message: 'Trip completed successfully.',
+        calendar_sync: calendarSync,
+      });
     }
 
     if (input.action === 'cancel_booking') {
@@ -643,7 +1070,12 @@ export async function POST(request: Request) {
         }
       }
 
-      return NextResponse.json({ success: true, message: 'Booking has been cancelled.' });
+      const calendarSync = await syncBookingToGoogleCalendar(bookingId, supabase);
+      return NextResponse.json({
+        success: true,
+        message: 'Booking has been cancelled.',
+        calendar_sync: calendarSync,
+      });
     }
 
     if (input.action === 'record_customer_payment') {

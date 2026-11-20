@@ -363,4 +363,19 @@ test('business analytics migration enforces Admin-only SECURITY DEFINER RPC and 
   );
 });
 
+test('google calendar sync and manual booking migration adds tracking columns and Admin SECURITY DEFINER RPCs', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160006_google_calendar_sync.sql', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /add column if not exists google_calendar_event_id text/i);
+  assert.match(migration, /add column if not exists google_calendar_synced_at timestamptz/i);
+  assert.match(migration, /add column if not exists google_calendar_sync_error text/i);
+  assert.match(migration, /create or replace function public\.get_booking_for_calendar_sync/i);
+  assert.match(migration, /create or replace function public\.record_booking_calendar_sync_result/i);
+  assert.match(migration, /create or replace function public\.admin_create_manual_booking/i);
+  assert.match(migration, /revoke all on function public\.admin_create_manual_booking[\s\S]*from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.admin_create_manual_booking[\s\S]*to authenticated/i);
+});
+
 

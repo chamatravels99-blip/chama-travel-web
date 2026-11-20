@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isSameOriginRequest } from '@/lib/server/authorization';
 import { enforceGuestRateLimit } from '@/lib/server/rate-limit';
 import { createServiceClient } from '@/lib/server/service-client';
+import { syncBookingToGoogleCalendar } from '@/lib/google-calendar';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
@@ -48,6 +49,13 @@ export async function POST(request: Request) {
       { status: 409, headers: { 'Cache-Control': 'no-store' } }
     );
   }
+
+  try {
+    await syncBookingToGoogleCalendar({ quoteId }, supabase);
+  } catch (syncError) {
+    console.error('Non-blocking Google Calendar sync failed on guest quote acceptance:', syncError);
+  }
+
   return NextResponse.json(
     { success: true, message: 'Your booking is confirmed.' },
     { headers: { 'Cache-Control': 'no-store' } }
