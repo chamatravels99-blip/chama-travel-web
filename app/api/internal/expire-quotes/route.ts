@@ -1,6 +1,17 @@
-import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+
+function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  if (aBytes.length !== bBytes.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i += 1) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+  return diff === 0;
+}
 
 export async function POST(request: Request) {
   const secret = process.env.QUOTE_EXPIRY_CRON_SECRET;
@@ -12,9 +23,7 @@ export async function POST(request: Request) {
   }
 
   const supplied = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
-  const providedBytes = Buffer.from(supplied);
-  const secretBytes = Buffer.from(secret);
-  if (providedBytes.length !== secretBytes.length || !timingSafeEqual(providedBytes, secretBytes)) {
+  if (!constantTimeEqual(supplied, secret)) {
     return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
   }
 

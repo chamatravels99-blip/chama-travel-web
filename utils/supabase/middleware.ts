@@ -9,9 +9,25 @@ import { requiredRolesForPath } from '@/utils/supabase/route-roles';
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const pathname = request.nextUrl.pathname;
+  const requiredRoles = requiredRolesForPath(pathname);
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (requiredRoles) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
@@ -26,12 +42,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-  const requiredRoles = requiredRolesForPath(pathname);
+  let user = null;
+  try {
+    const authResult = await supabase.auth.getUser();
+    user = authResult.data?.user ?? null;
+  } catch (authError) {
+    console.error('Session refresh failed in proxy middleware.', authError);
+    user = null;
+  }
 
   if (requiredRoles) {
     response.headers.set('Cache-Control', 'private, no-store');

@@ -63,8 +63,13 @@ async function readJson(request: Request): Promise<unknown> {
     offset += chunk.byteLength;
   }
   try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
+    const decoded = new TextDecoder().decode(bytes).trim();
+    if (!decoded) {
+      throw new RequestError('Booking details must be valid JSON.', 400);
+    }
+    return JSON.parse(decoded);
+  } catch (err) {
+    if (err instanceof RequestError) throw err;
     throw new RequestError('Booking details must be valid JSON.', 400);
   }
 }
