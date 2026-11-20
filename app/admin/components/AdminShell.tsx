@@ -51,7 +51,7 @@ const navigation: NavigationItem[] = [
   { label: 'Fleet', href: '/admin/fleet', icon: Car, roles: ADMIN_ROLES },
   { label: 'Tour Packages', href: '/admin/tour-packages', icon: Map, roles: ADMIN_ROLES },
   { label: 'Gallery & Activities', href: '/admin/gallery-activities', icon: Image, roles: ADMIN_ROLES },
-  { label: 'Analytics', icon: BarChart3, roles: ADMIN_ROLES, comingSoon: true },
+  { label: 'Analytics', href: '/admin/analytics', icon: BarChart3, roles: ADMIN_ROLES },
   { label: 'Customers', href: '/admin/customers', icon: Users, roles: ADMIN_ROLES },
   { label: 'Marketing', icon: Megaphone, roles: ADMIN_ROLES, comingSoon: true },
   { label: 'Users', href: '/admin/users', icon: ShieldCheck, roles: ADMIN_ROLES },

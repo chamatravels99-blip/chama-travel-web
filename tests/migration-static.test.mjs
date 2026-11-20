@@ -343,4 +343,24 @@ test('customer CRM profiles migration enforces Admin-only RLS, aggregation RPC, 
   );
 });
 
+test('business analytics migration enforces Admin-only SECURITY DEFINER RPC and activates AdminShell item #7', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160005_admin_analytics_reporting.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create or replace function public\.admin_get_analytics_data\(\)/i);
+  assert.match(migration, /security definer\s+set search_path = ''/i);
+  assert.match(migration, /if not private\.is_active_admin\(\) then/i);
+  assert.match(migration, /revoke all on function public\.admin_get_analytics_data\(\)\s+from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.admin_get_analytics_data\(\)\s+to authenticated/i);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Analytics',\s*href:\s*'\/admin\/analytics',\s*icon:\s*BarChart3,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+});
+
 
