@@ -83,6 +83,9 @@ type Billing = {
 
 type PaymentTypeOption = 'full' | 'advance' | 'part';
 
+const DEFAULT_INVOICE_NOTE =
+  'Includes private air-conditioned vehicle, fuel, driver allowance, and highway tolls. Entrance tickets and personal expenses are excluded unless specified.';
+
 function getColomboToday(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Colombo',
@@ -146,6 +149,7 @@ export default function BookingBillingPanel({
   const [payDate, setPayDate] = useState<string>(getColomboToday);
   const [payRef, setPayRef] = useState('');
   const [payNote, setPayNote] = useState('');
+  const [invoiceNote, setInvoiceNote] = useState(DEFAULT_INVOICE_NOTE);
   const [recordingPayment, setRecordingPayment] = useState(false);
   const [lastCreatedReceipt, setLastCreatedReceipt] = useState<{
     receiptNumber: string;
@@ -298,6 +302,9 @@ export default function BookingBillingPanel({
           method: payMethod,
           payment_date: payDate,
           reference: combinedReference,
+          payment_type: paymentType,
+          payment_ref: payRef.trim(),
+          payment_note: payNote.trim(),
           request_id: paymentRequestId.current,
         }),
       });
@@ -689,6 +696,7 @@ export default function BookingBillingPanel({
                     booking_id: bookingId,
                     quote_id: acceptedQuoteId,
                     request_id: invoiceRequestId.current,
+                    invoice_note: invoiceNote.trim() || DEFAULT_INVOICE_NOTE,
                   });
                 }}
               >
@@ -696,6 +704,23 @@ export default function BookingBillingPanel({
               </button>
             )}
           </div>
+
+          {acceptedQuoteId && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-700">
+                Customer-Facing Invoice Note &amp; Inclusions{' '}
+                <span className="font-normal text-slate-500">(Printed on Invoice PDF)</span>
+              </label>
+              <textarea
+                rows={2}
+                maxLength={600}
+                value={invoiceNote}
+                onChange={(e) => setInvoiceNote(e.target.value)}
+                placeholder={DEFAULT_INVOICE_NOTE}
+                className="w-full rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-blue-600 focus:outline-none"
+              />
+            </div>
+          )}
 
           {loadingBilling && !billing ? (
             <p className="text-xs text-slate-500 py-4 text-center">Loading invoices…</p>
@@ -760,6 +785,8 @@ export default function BookingBillingPanel({
                           void postBillingAction('/api/admin/billing', {
                             action: 'retry_render',
                             document_id: inv.document_id,
+                            booking_id: bookingId,
+                            invoice_note: invoiceNote.trim() || DEFAULT_INVOICE_NOTE,
                           })
                         }
                       >
@@ -779,8 +806,10 @@ export default function BookingBillingPanel({
                             void postBillingAction('/api/admin/billing', {
                               action: 'replace_invoice',
                               invoice_id: inv.id,
+                              booking_id: bookingId,
                               reason: reason.trim(),
                               request_id: replacementRequestIds.current[inv.id],
+                              invoice_note: invoiceNote.trim() || DEFAULT_INVOICE_NOTE,
                             });
                           }}
                         >
@@ -891,6 +920,7 @@ export default function BookingBillingPanel({
                               void postBillingAction('/api/admin/billing', {
                                 action: 'issue_receipt',
                                 payment_id: payment.payment_id,
+                                booking_id: bookingId,
                               })
                             }
                           >

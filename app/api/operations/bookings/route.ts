@@ -1120,7 +1120,18 @@ export async function POST(request: Request) {
           const docId: string = docRow.document_id;
           receiptDocumentId = docId;
           try {
-            await renderAndStoreBillingDocument(supabase, docId);
+            const paymentType =
+              typeof input.payment_type === 'string' ? input.payment_type.trim() : null;
+            const paymentNote =
+              typeof input.payment_note === 'string' ? input.payment_note.trim().slice(0, 500) : null;
+            const paymentRef =
+              typeof input.payment_ref === 'string' ? input.payment_ref.trim().slice(0, 120) : null;
+            await renderAndStoreBillingDocument(supabase, docId, {
+              paymentType,
+              paymentNote,
+              paymentRef,
+              bookingId: paymentInput.bookingId,
+            });
           } catch (renderErr) {
             console.error('Automatic receipt PDF render failed.', renderErr instanceof Error ? renderErr.message : 'unknown');
           }

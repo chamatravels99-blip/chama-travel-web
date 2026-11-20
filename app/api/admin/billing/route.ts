@@ -114,8 +114,15 @@ export async function POST(request: Request) {
     }
 
     if (documentId) {
+      const invoiceNote =
+        typeof input.invoice_note === 'string' ? input.invoice_note.trim().slice(0, 600) : null;
+      const bookingId =
+        typeof input.booking_id === 'string' && isUuid(input.booking_id) ? input.booking_id : null;
       try {
-        await renderAndStoreBillingDocument(supabase, documentId);
+        await renderAndStoreBillingDocument(supabase, documentId, {
+          invoiceNote,
+          bookingId,
+        });
       } catch (error) {
         console.error('Billing document rendering failed.', error instanceof Error ? error.message : 'unknown');
         return NextResponse.json(

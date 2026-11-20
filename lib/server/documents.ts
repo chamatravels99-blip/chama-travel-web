@@ -1,6 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { renderInvoicePdf, renderReceiptPdf, sha256Hex } from '@/lib/pdf/billing-documents';
+import {
+  renderInvoicePdf,
+  renderReceiptPdf,
+  sha256Hex,
+  type ReceiptRenderOptions,
+} from '@/lib/pdf/billing-documents';
 import { createServiceClient, DOCUMENT_BUCKET } from '@/lib/server/service-client';
+
+export interface BillingRenderOptions {
+  invoiceNote?: string | null;
+  paymentType?: string | null;
+  paymentNote?: string | null;
+  paymentRef?: string | null;
+  bookingId?: string | null;
+}
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -35,17 +48,84 @@ export async function readJsonBody(request: Request, maxBytes = 8192): Promise<R
  * The Admin session client performs the authorizing RPCs; the service client
  * only moves bytes after those RPCs succeeded.
  */
-export async function renderAndStoreBillingDocument(adminClient: SupabaseClient, documentId: string) {
+export async function renderAndStoreBillingDocument(
+  adminClient: SupabaseClient,
+  documentId: string,
+  options: BillingRenderOptions = {}
+) {
   const { data, error } = await adminClient.rpc('admin_get_document_for_render', { p_document_id: documentId });
   if (error || !data || typeof data !== 'object') throw new Error('Document could not be loaded.');
-  const doc = data as { document_type: string; storage_path: string; file_status: string; snapshot: unknown };
+  const doc = data as {
+    document_type: string;
+    storage_path: string;
+    file_status: string;
+    booking_id?: string | null;
+    snapshot: unknown;
+  };
   if (doc.file_status === 'stored') return;
   if (doc.document_type !== 'invoice' && doc.document_type !== 'receipt') {
     throw new Error('Only invoice and receipt documents can be generated here.');
   }
   if (!doc.snapshot) throw new Error('Document snapshot is unavailable.');
 
-  const bytes = doc.document_type === 'invoice' ? renderInvoicePdf(doc.snapshot) : renderReceiptPdf(doc.snapshot);
+  let bytes: Uint8Array;
+  if (doc.document_type === 'invoice') {
+    bytes = await renderInvoicePdf(doc.snapshot, {
+      invoiceNote: options.invoiceNote ?? null,
+    });
+  } else {
+    // Optionally enrich receipt journey details (route/date/passengers) without ever exposing internal notes
+    let journey: ReceiptRenderOptions['journey'] = null;
+    const targetBookingId =
+      options.bookingId ??
+      doc.booking_id ??
+      (doc.snapshot && typeof doc.snapshot === 'object' && 'booking_id' in doc.snapshot
+        ? String((doc.snapshot as Record<string, unknown>).booking_id)
+        : null);
+
+    if (targetBookingId && isUuid(targetBookingId)) {
+      try {
+        const bookingRes = await adminClient.rpc('get_booking_for_calendar_sync', {
+          p_booking_id: targetBookingId,
+          p_quote_id: null,
+        });
+        if (!bookingRes.error && bookingRes.data && typeof bookingRes.data === 'object') {
+          const b = bookingRes.data as {
+            service_type?: string;
+            journey_type?: string;
+            passenger_count?: number;
+            luggage_count?: number;
+            legs?: Array<{
+              pickup_location?: string;
+              dropoff_location?: string;
+              pickup_at?: string;
+            }>;
+          };
+          const firstLeg = Array.isArray(b.legs) ? b.legs[0] : undefined;
+          const lastLeg = Array.isArray(b.legs) ? b.legs[b.legs.length - 1] : firstLeg;
+          journey = {
+            service_type: b.service_type ?? null,
+            journey_type: b.journey_type ?? null,
+            passenger_count: b.passenger_count ?? null,
+            luggage_count: b.luggage_count ?? null,
+            pickup_location: firstLeg?.pickup_location ?? null,
+            dropoff_location: lastLeg?.dropoff_location ?? firstLeg?.dropoff_location ?? null,
+            pickup_at: firstLeg?.pickup_at ?? null,
+          };
+        }
+      } catch {
+        // Non-blocking journey enrichment
+      }
+    }
+
+    bytes = await renderReceiptPdf(doc.snapshot, {
+      paymentType: options.paymentType ?? null,
+      paymentNote: options.paymentNote ?? null,
+      paymentRef: options.paymentRef ?? null,
+      journey,
+    });
+  }
+
   if (bytes.length === 0 || bytes.length > MAX_DOCUMENT_BYTES) {
     throw new Error('Generated PDF exceeds the 5 MB document limit.');
   }
