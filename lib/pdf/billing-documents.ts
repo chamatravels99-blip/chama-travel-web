@@ -307,7 +307,7 @@ async function drawBrandedHeader(params: {
   bookingRef: string;
   paymentStatusLabel: string;
   paymentStatusVariant: 'paid' | 'partial' | 'unpaid';
-}): Promise<number> {
+}): Promise<{ leftY: number; rightBottomY: number }> {
   const {
     pdfDoc,
     page,
@@ -324,6 +324,7 @@ async function drawBrandedHeader(params: {
 
   const topY = PAGE_HEIGHT - MARGIN_TOP;
   const accentColor = docType === 'receipt' ? COLOR_EMERALD : COLOR_BLUE;
+  const leftColWidth = 310;
 
   // Top luxury accent bar across full width
   page.drawRectangle({
@@ -334,14 +335,14 @@ async function drawBrandedHeader(params: {
     color: accentColor,
   });
 
-  // 1. Logo on top-left
-  let textStartX = MARGIN_X;
+  // 1. Top-left: Logo, followed directly below by the left-aligned "From" block
+  let leftY = topY;
   try {
     const logoBytes = decodeBase64ToBytes(PDF_LOGO_JPG_BASE64);
     const logoImg = await pdfDoc.embedJpg(logoBytes);
-    const targetHeight = 56;
+    const targetHeight = 46;
     const scale = targetHeight / logoImg.height;
-    const targetWidth = Math.min(110, logoImg.width * scale);
+    const targetWidth = Math.min(100, logoImg.width * scale);
     const finalHeight = (targetWidth / logoImg.width) * logoImg.height;
     page.drawImage(logoImg, {
       x: MARGIN_X,
@@ -349,52 +350,62 @@ async function drawBrandedHeader(params: {
       width: targetWidth,
       height: finalHeight,
     });
-    textStartX = MARGIN_X + targetWidth + 12;
+    leftY = topY - finalHeight - 10;
   } catch {
     // Graceful fallback if logo cannot be embedded
-    textStartX = MARGIN_X;
+    leftY = topY - 4;
   }
 
-  // 2. Official Company Details next to logo
+  // "From" block (left-aligned directly below the logo)
+  page.drawText('FROM', {
+    x: MARGIN_X,
+    y: leftY,
+    size: 7.5,
+    font: fontBold,
+    color: accentColor,
+  });
+  leftY -= 12;
+
   page.drawText(sanitizePdfText(COMPANY_NAME), {
-    x: textStartX,
-    y: topY - 4,
-    size: 16,
+    x: MARGIN_X,
+    y: leftY,
+    size: 11,
     font: fontBold,
     color: COLOR_NAVY,
   });
+  leftY -= 12.5;
 
-  const addrLines = wrapText(COMPANY_ADDRESS, fontRegular, 8, 225);
-  let companyY = topY - 18;
+  const addrLines = wrapText(COMPANY_ADDRESS, fontRegular, 8, leftColWidth);
   for (const line of addrLines) {
     page.drawText(line, {
-      x: textStartX,
-      y: companyY,
+      x: MARGIN_X,
+      y: leftY,
       size: 8,
       font: fontRegular,
       color: COLOR_SLATE_500,
     });
-    companyY -= 11;
+    leftY -= 10.5;
   }
 
   page.drawText(sanitizePdfText(`Phone / WhatsApp: ${COMPANY_PHONE}`), {
-    x: textStartX,
-    y: companyY,
+    x: MARGIN_X,
+    y: leftY,
     size: 8,
     font: fontBold,
     color: COLOR_SLATE_700,
   });
-  companyY -= 11;
+  leftY -= 10.5;
 
   page.drawText(sanitizePdfText(`Email: ${COMPANY_EMAIL}  |  Web: ${COMPANY_WEBSITE}`), {
-    x: textStartX,
-    y: companyY,
+    x: MARGIN_X,
+    y: leftY,
     size: 8,
     font: fontRegular,
     color: COLOR_SLATE_500,
   });
+  leftY -= 14;
 
-  // 3. Top-right Document Title Badge + Metadata
+  // 2. Top-right Document Title Badge + Metadata (unchanged)
   const rightX = PAGE_WIDTH - MARGIN_X;
   const badgeLabel = docType === 'receipt' ? 'PAYMENT RECEIPT' : 'INVOICE';
   const badgeTextW = fontBold.widthOfTextAtSize(badgeLabel, 12);
@@ -439,112 +450,87 @@ async function drawBrandedHeader(params: {
 
   drawStatusPill(page, paymentStatusLabel, rightX, topY - 72, fontBold, paymentStatusVariant);
 
-  // Clean horizontal header divider
-  const headerBottomY = Math.min(companyY - 12, topY - 84);
+  return {
+    leftY,
+    rightBottomY: topY - 84,
+  };
+}
+
+function drawLeftAlignedInfoStack(params: {
+  page: PDFPage;
+  startY: number;
+  rightBottomY: number;
+  fontRegular: PDFFont;
+  fontBold: PDFFont;
+  customerTitle: string;
+  customerRows: Array<{ label: string; value: string; bold?: boolean }>;
+  journeyTitle: string;
+  journeyRows: Array<{ label: string; value: string; bold?: boolean }>;
+  accentColor: RGB;
+}): number {
+  const {
+    page,
+    startY,
+    rightBottomY,
+    fontRegular,
+    fontBold,
+    customerTitle,
+    customerRows,
+    journeyTitle,
+    journeyRows,
+    accentColor,
+  } = params;
+
+  const maxBlockWidth = 360;
+  let y = startY;
+
+  const drawBlock = (
+    title: string,
+    rows: Array<{ label: string; value: string; bold?: boolean }>
+  ) => {
+    page.drawText(sanitizePdfText(title.toUpperCase()), {
+      x: MARGIN_X,
+      y,
+      size: 7.5,
+      font: fontBold,
+      color: accentColor,
+    });
+    y -= 12;
+
+    for (const row of rows) {
+      const font = row.bold ? fontBold : fontRegular;
+      const size = row.bold ? 9.5 : 8.5;
+      const color = row.bold ? COLOR_NAVY : COLOR_SLATE_700;
+      const prefix = row.bold ? '' : `${row.label}: `;
+      const lines = wrapText(`${prefix}${row.value}`, font, size, maxBlockWidth);
+      for (const line of lines) {
+        page.drawText(line, {
+          x: MARGIN_X,
+          y,
+          size,
+          font,
+          color,
+        });
+        y -= row.bold ? 12 : 11;
+      }
+    }
+    y -= 10;
+  };
+
+  // Directly below From block on the LEFT side:
+  drawBlock(customerTitle, customerRows);
+  // Directly below Bill to / Received from block on the LEFT side:
+  drawBlock(journeyTitle, journeyRows);
+
+  const dividerY = Math.min(y + 2, rightBottomY - 8);
   page.drawLine({
-    start: { x: MARGIN_X, y: headerBottomY },
-    end: { x: rightX, y: headerBottomY },
+    start: { x: MARGIN_X, y: dividerY },
+    end: { x: PAGE_WIDTH - MARGIN_X, y: dividerY },
     thickness: 1,
     color: COLOR_BORDER,
   });
 
-  return headerBottomY - 16;
-}
-
-function drawTwoColumnInfoCards(params: {
-  page: PDFPage;
-  startY: number;
-  fontRegular: PDFFont;
-  fontBold: PDFFont;
-  leftTitle: string;
-  leftRows: Array<{ label: string; value: string; bold?: boolean }>;
-  rightTitle: string;
-  rightRows: Array<{ label: string; value: string; bold?: boolean }>;
-  accentColor: RGB;
-}): number {
-  const { page, startY, fontRegular, fontBold, leftTitle, leftRows, rightTitle, rightRows, accentColor } =
-    params;
-
-  const gap = 14;
-  const cardW = (CONTENT_WIDTH - gap) / 2;
-  const innerPad = 12;
-  const innerW = cardW - innerPad * 2;
-
-  const measureCard = (rows: Array<{ label: string; value: string; bold?: boolean }>) => {
-    let h = 28; // header + top/bottom padding
-    for (const row of rows) {
-      const lines = wrapText(row.value, row.bold ? fontBold : fontRegular, 8.8, innerW);
-      h += 10 + lines.length * 11.5 + 4;
-    }
-    return Math.max(h + 6, 98);
-  };
-
-  const cardH = Math.max(measureCard(leftRows), measureCard(rightRows));
-  const cardBottomY = startY - cardH;
-
-  const drawCard = (
-    x: number,
-    title: string,
-    rows: Array<{ label: string; value: string; bold?: boolean }>
-  ) => {
-    page.drawRectangle({
-      x,
-      y: cardBottomY,
-      width: cardW,
-      height: cardH,
-      color: COLOR_CARD_BG,
-      borderColor: COLOR_BORDER,
-      borderWidth: 0.8,
-    });
-
-    // Subtle top accent strip on card
-    page.drawRectangle({
-      x,
-      y: startY - 2.5,
-      width: cardW,
-      height: 2.5,
-      color: accentColor,
-    });
-
-    let y = startY - 16;
-    page.drawText(sanitizePdfText(title.toUpperCase()), {
-      x: x + innerPad,
-      y,
-      size: 8,
-      font: fontBold,
-      color: accentColor,
-    });
-    y -= 14;
-
-    for (const row of rows) {
-      page.drawText(sanitizePdfText(row.label.toUpperCase()), {
-        x: x + innerPad,
-        y,
-        size: 7,
-        font: fontBold,
-        color: COLOR_SLATE_500,
-      });
-      y -= 10.5;
-      const font = row.bold ? fontBold : fontRegular;
-      const lines = wrapText(row.value, font, 8.8, innerW);
-      for (const line of lines) {
-        page.drawText(line, {
-          x: x + innerPad,
-          y,
-          size: 8.8,
-          font,
-          color: COLOR_NAVY,
-        });
-        y -= 11.5;
-      }
-      y -= 3;
-    }
-  };
-
-  drawCard(MARGIN_X, leftTitle, leftRows);
-  drawCard(MARGIN_X + cardW + gap, rightTitle, rightRows);
-
-  return cardBottomY - 16;
+  return dividerY - 14;
 }
 
 function drawBoxedCard(params: {
@@ -714,7 +700,7 @@ export async function renderInvoicePdf(
         ? 'PARTIALLY PAID'
         : 'UNPAID';
 
-  let cursorY = await drawBrandedHeader({
+  const headerPos = await drawBrandedHeader({
     pdfDoc,
     page,
     fontRegular,
@@ -738,29 +724,30 @@ export async function renderInvoicePdf(
 
   const leftRows: Array<{ label: string; value: string; bold?: boolean }> = [
     { label: 'Customer Name', value: str(customer.name), bold: true },
-    ...(customer.email ? [{ label: 'Email Address', value: str(customer.email) }] : []),
+    ...(customer.email ? [{ label: 'Email', value: str(customer.email) }] : []),
     ...(customer.phone ? [{ label: 'Phone / WhatsApp', value: str(customer.phone) }] : []),
   ];
 
   const rightRows: Array<{ label: string; value: string; bold?: boolean }> = [
-    { label: 'Service Type', value: formatServiceLabel(booking.service_type, booking.journey_type), bold: true },
     { label: 'Route', value: routeText },
-    { label: 'Travel Date & Time', value: travelDateText },
+    { label: 'Date & Time', value: travelDateText },
+    { label: 'Service Type', value: formatServiceLabel(booking.service_type, booking.journey_type) },
     {
-      label: 'Passengers & Luggage',
+      label: 'Passengers',
       value: `${str(booking.passenger_count, '1')} Passenger(s) · ${str(booking.luggage_count, '0')} Bag(s)`,
     },
   ];
 
-  cursorY = drawTwoColumnInfoCards({
+  let cursorY = drawLeftAlignedInfoStack({
     page,
-    startY: cursorY,
+    startY: headerPos.leftY,
+    rightBottomY: headerPos.rightBottomY,
     fontRegular,
     fontBold,
-    leftTitle: 'BILL TO',
-    leftRows,
-    rightTitle: 'JOURNEY & BOOKING DETAILS',
-    rightRows,
+    customerTitle: 'Bill to',
+    customerRows: leftRows,
+    journeyTitle: 'Journey details',
+    journeyRows: rightRows,
     accentColor: COLOR_BLUE,
   });
 
@@ -1051,7 +1038,7 @@ export async function renderReceiptPdf(
   const statusVariant: 'paid' | 'partial' = isPartial ? 'partial' : 'paid';
   const statusLabel = isPartial ? 'PARTIALLY PAID' : 'PAID IN FULL';
 
-  let cursorY = await drawBrandedHeader({
+  const headerPos = await drawBrandedHeader({
     pdfDoc,
     page,
     fontRegular,
@@ -1067,7 +1054,7 @@ export async function renderReceiptPdf(
 
   const leftRows: Array<{ label: string; value: string; bold?: boolean }> = [
     { label: 'Customer Name', value: str(customer.name), bold: true },
-    ...(customer.email ? [{ label: 'Email Address', value: str(customer.email) }] : []),
+    ...(customer.email ? [{ label: 'Email', value: str(customer.email) }] : []),
     ...(customer.phone ? [{ label: 'Phone / WhatsApp', value: str(customer.phone) }] : []),
   ];
 
@@ -1077,16 +1064,12 @@ export async function renderReceiptPdf(
       : null;
 
   const rightRows: Array<{ label: string; value: string; bold?: boolean }> = [
-    { label: 'Booking Reference', value: str(snapshot.booking_ref || bookingObj.booking_ref), bold: true },
-    ...(snapshot.invoice_number
-      ? [{ label: 'Linked Invoice', value: str(snapshot.invoice_number) }]
+    ...(routeFromJourney ? [{ label: 'Route', value: routeFromJourney }] : []),
+    ...(journeyOpt?.pickup_at
+      ? [{ label: 'Date & Time', value: formatDateTime(journeyOpt.pickup_at) }]
       : []),
     ...(journeyOpt?.service_type
       ? [{ label: 'Service Type', value: formatServiceLabel(journeyOpt.service_type, journeyOpt.journey_type) }]
-      : []),
-    ...(routeFromJourney ? [{ label: 'Route', value: routeFromJourney }] : []),
-    ...(journeyOpt?.pickup_at
-      ? [{ label: 'Travel Date & Time', value: formatDateTime(journeyOpt.pickup_at) }]
       : []),
     ...(journeyOpt?.passenger_count
       ? [
@@ -1098,17 +1081,24 @@ export async function renderReceiptPdf(
           },
         ]
       : []),
+    ...(snapshot.invoice_number
+      ? [{ label: 'Linked Invoice', value: str(snapshot.invoice_number) }]
+      : []),
+    ...(!journeyOpt?.pickup_location && !journeyOpt?.service_type && !snapshot.invoice_number
+      ? [{ label: 'Booking Ref', value: str(snapshot.booking_ref || bookingObj.booking_ref) }]
+      : []),
   ];
 
-  cursorY = drawTwoColumnInfoCards({
+  let cursorY = drawLeftAlignedInfoStack({
     page,
-    startY: cursorY,
+    startY: headerPos.leftY,
+    rightBottomY: headerPos.rightBottomY,
     fontRegular,
     fontBold,
-    leftTitle: 'RECEIVED FROM',
-    leftRows,
-    rightTitle: 'JOURNEY & BOOKING DETAILS',
-    rightRows,
+    customerTitle: 'Received from',
+    customerRows: leftRows,
+    journeyTitle: 'Journey details',
+    journeyRows: rightRows,
     accentColor: COLOR_EMERALD,
   });
 
