@@ -321,4 +321,26 @@ test('gallery & activities migration enforces RLS, admin policies, and activates
   );
 });
 
+test('customer CRM profiles migration enforces Admin-only RLS, aggregation RPC, and activates AdminShell item #8', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160004_customer_crm_profiles.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create table if not exists public\.customer_crm_profiles/i);
+  assert.match(migration, /alter table public\.customer_crm_profiles enable row level security/i);
+  assert.match(migration, /create policy customer_crm_profiles_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)[\s\S]*with check \(private\.is_active_admin\(\)\)/i);
+  assert.doesNotMatch(migration, /grant\s+select\s+on\s+table\s+public\.customer_crm_profiles\s+to\s+anon/i);
+  assert.match(migration, /admin_get_customer_crm_source_data\(\)[\s\S]*security definer\s+set search_path = ''/i);
+  assert.match(migration, /revoke all on function public\.admin_get_customer_crm_source_data\(\)\s+from public, anon, authenticated, service_role/i);
+  assert.match(migration, /grant execute on function public\.admin_get_customer_crm_source_data\(\)\s+to authenticated/i);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Customers',\s*href:\s*'\/admin\/customers',\s*icon:\s*Users,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+});
+
 
