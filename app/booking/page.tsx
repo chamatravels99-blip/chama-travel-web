@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import BookingForm, { type BookingFormInitialValues } from '@/components/BookingForm';
+import PromoOfferBanner from '@/app/components/PromoOfferBanner';
 import { SERVICE_TYPES, VEHICLES } from '@/lib/constants';
 
 export const metadata: Metadata = {
@@ -85,10 +86,13 @@ export default async function BookingPage({
   const initialValues = parseInitialValues(await searchParams);
 
   return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <BookingForm initialValues={initialValues} />
-      </div>
-    </main>
+    <div className="min-h-screen bg-gray-50">
+      <PromoOfferBanner />
+      <main className="py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <BookingForm initialValues={initialValues} />
+        </div>
+      </main>
+    </div>
   );
 }

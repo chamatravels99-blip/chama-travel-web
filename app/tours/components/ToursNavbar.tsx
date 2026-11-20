@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import PromoOfferBanner from "@/app/components/PromoOfferBanner";
 
 const whatsappNumber = "94711114901";
 
@@ -24,6 +25,7 @@ export default function ToursNavbar({ activePage = "Tours" }: ToursNavbarProps) 
 
   return (
     <header className="absolute left-0 right-0 top-0 z-30">
+      <PromoOfferBanner />
       <div className="mx-auto mt-2 flex w-[calc(100%-1rem)] max-w-7xl items-center justify-between rounded-2xl border border-white/15 bg-black/35 px-3 py-3 shadow-lg shadow-black/15 backdrop-blur-md sm:mt-4 sm:px-6 sm:py-4 lg:px-8">
         {/* Brand Logo */}
         <Link

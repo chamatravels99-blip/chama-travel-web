@@ -378,4 +378,37 @@ test('google calendar sync and manual booking migration adds tracking columns an
   assert.match(migration, /grant execute on function public\.admin_create_manual_booking[\s\S]*to authenticated/i);
 });
 
+test('marketing & promotions migration enforces RLS, admin policies, seed data, and activates AdminShell item #10', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611160007_marketing_promotions_system.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create table if not exists public\.promo_codes/i);
+  assert.match(migration, /create table if not exists public\.marketing_banners/i);
+  assert.match(migration, /create table if not exists public\.marketing_templates/i);
+  assert.match(migration, /alter table public\.promo_codes enable row level security/i);
+  assert.match(migration, /alter table public\.marketing_banners enable row level security/i);
+  assert.match(migration, /alter table public\.marketing_templates enable row level security/i);
+  assert.match(migration, /create policy promo_codes_public_read_active[\s\S]*is_active = true/i);
+  assert.match(migration, /create policy promo_codes_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(migration, /create policy marketing_banners_public_read_active[\s\S]*using \(is_active = true\)/i);
+  assert.match(migration, /create policy marketing_banners_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.match(migration, /create policy marketing_templates_admin_all[\s\S]*using \(private\.is_active_admin\(\)\)/i);
+  assert.doesNotMatch(migration, /grant\s+select\s+on\s+table\s+public\.marketing_templates\s+to\s+anon/i);
+  assert.match(migration, /'WELCOME10'/);
+  assert.match(migration, /'AIRPORT15'/);
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Marketing',\s*href:\s*'\/admin\/marketing',\s*icon:\s*Megaphone,\s*roles:\s*ADMIN_ROLES\s*\}/
+  );
+  assert.match(
+    shell,
+    /\{\s*label:\s*'Settings',\s*icon:\s*Settings,\s*roles:\s*ADMIN_ROLES,\s*comingSoon:\s*true\s*\}/
+  );
+});
+
 

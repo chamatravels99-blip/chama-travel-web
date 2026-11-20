@@ -152,8 +152,69 @@ export default function BookingForm({
   const [bookingReference, setBookingReference] = useState<string | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [trackerUrl, setTrackerUrl] = useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState('');
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    title: string;
+    discount_label: string;
+    booking_note_tag: string;
+  } | null>(null);
+  const [promoError, setPromoError] = useState('');
   const submittingRef = useRef(false);
   const idempotencyRef = useRef<IdempotencyEntry | null>(null);
+
+  async function handleApplyPromoCode() {
+    const cleanCode = promoInput.trim().toUpperCase();
+    if (!cleanCode) {
+      setPromoError('Enter a promo code to apply.');
+      return;
+    }
+    setValidatingPromo(true);
+    setPromoError('');
+    try {
+      const res = await fetch('/api/marketing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'validate_code',
+          code: cleanCode,
+          service_type: formData.service_type,
+          currency: formData.currency,
+        }),
+      });
+      const result = (await res.json()) as {
+        success?: boolean;
+        valid?: boolean;
+        error?: string;
+        data?: {
+          code?: string;
+          title?: string;
+          discount_label?: string;
+          booking_note_tag?: string;
+        };
+      };
+      if (!res.ok || !result.valid || !result.data?.code) {
+        setAppliedPromo(null);
+        setPromoError(result.error || 'This promo code is invalid or expired.');
+        return;
+      }
+      setAppliedPromo({
+        code: result.data.code,
+        title: result.data.title || 'Promotional Offer',
+        discount_label: result.data.discount_label || 'Discount Applied',
+        booking_note_tag:
+          result.data.booking_note_tag ||
+          `Promo code applied: ${result.data.code} (${result.data.discount_label || ''})`,
+      });
+      setPromoInput(result.data.code);
+      setPromoError('');
+    } catch {
+      setPromoError('Could not verify promo code right now.');
+    } finally {
+      setValidatingPromo(false);
+    }
+  }
 
   const loadVehicleCategories = useCallback(async () => {
     try {
@@ -269,6 +330,7 @@ export default function BookingForm({
     const bookingNotes = [
       bookingTitle ? `Booking title: ${bookingTitle}` : '',
       `Vehicle preference: ${category.display_name}`,
+      appliedPromo ? appliedPromo.booking_note_tag : '',
       formData.notes.trim(),
     ].filter(Boolean).join('\n');
     if (bookingNotes.length > 1000) {
@@ -638,6 +700,58 @@ export default function BookingForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="font-bold text-slate-700 uppercase">Passengers<input type="number" name="passengers" min="1" max="14" required value={formData.passengers} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
         <label className="font-bold text-slate-700 uppercase">Luggage<input type="number" name="luggage" min="0" max="14" value={formData.luggage} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
+      </div>
+
+      {/* Optional Promo Code Validation Box */}
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+        <label htmlFor="booking-promo-code" className="block font-bold text-slate-700 uppercase">
+          Have a Promo Code? <span className="font-normal text-slate-400 normal-case">(Optional)</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            id="booking-promo-code"
+            value={promoInput}
+            onChange={(e) => {
+              setPromoInput(e.target.value.toUpperCase());
+              setPromoError('');
+            }}
+            placeholder="e.g. WELCOME10"
+            className="flex-1 rounded-xl border border-slate-200 bg-white p-2.5 font-mono text-xs font-bold uppercase text-slate-900 focus:ring-2 focus:ring-blue-600 outline-none"
+          />
+          <button
+            type="button"
+            disabled={validatingPromo || !promoInput.trim()}
+            onClick={() => void handleApplyPromoCode()}
+            className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider text-white transition hover:bg-slate-700 disabled:opacity-50"
+          >
+            {validatingPromo ? 'Checking…' : 'Apply'}
+          </button>
+        </div>
+
+        {promoError && (
+          <p className="text-xs font-semibold text-red-700">{promoError}</p>
+        )}
+
+        {appliedPromo && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            <div>
+              <span className="font-black">✓ {appliedPromo.code}</span> —{' '}
+              <span className="font-bold">{appliedPromo.discount_label}</span>{' '}
+              <span className="text-emerald-700">({appliedPromo.title})</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setAppliedPromo(null);
+                setPromoInput('');
+              }}
+              className="text-[11px] font-bold text-emerald-800 underline hover:text-emerald-950"
+            >
+              Remove
+            </button>
+          </div>
+        )}
       </div>
 
       <div>
