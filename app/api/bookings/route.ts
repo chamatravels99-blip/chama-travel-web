@@ -109,7 +109,7 @@ function validateBody(value: unknown) {
     'pickup_location', 'dropoff_location', 'pickup_date', 'pickup_time',
     'return_date', 'return_time', 'end_date', 'end_time', 'flight_number',
     'flight_arrival_date', 'flight_arrival_time', 'passengers', 'luggage', 'currency',
-    'notes', 'idempotency_key', 'legs',
+    'notes', 'promo_code', 'idempotency_key', 'legs',
   ]);
   if (Object.keys(body).some((key) => !allowed.has(key))) {
     throw new RequestError('Booking details contain unsupported fields.', 400);
@@ -119,7 +119,7 @@ function validateBody(value: unknown) {
   const email = requiredText(body, 'email', 254).toLowerCase();
   const phone = requiredText(body, 'phone', 30);
   const serviceType = requiredText(body, 'service_type', 40);
-  const vehicleType = requiredText(body, 'vehicle_type', 40);
+  const vehicleType = requiredText(body, 'vehicle_type', 40).toLowerCase();
   const journeyType = body.journey_type === undefined ? 'one_way' : requiredText(body, 'journey_type', 20);
   const isMultiLeg = journeyType === 'multi_leg';
   const pickupLocation = isMultiLeg ? '' : requiredText(body, 'pickup_location', 200);
@@ -127,7 +127,13 @@ function validateBody(value: unknown) {
   const pickupDate = isMultiLeg ? '' : requiredText(body, 'pickup_date', 10);
   const pickupTime = isMultiLeg ? '' : requiredText(body, 'pickup_time', 5);
   const currency = body.currency === undefined ? 'LKR' : requiredText(body, 'currency', 3).toUpperCase();
-  const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 1000) : '';
+  const rawNotes = typeof body.notes === 'string' ? body.notes.trim() : '';
+  const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase().slice(0, 40) : '';
+  const notes = (
+    promoCode && !rawNotes.toUpperCase().includes(promoCode)
+      ? [rawNotes, `Promo code: ${promoCode}`].filter(Boolean).join('\n')
+      : rawNotes
+  ).slice(0, 1000);
   const passengers = Number(body.passengers);
   const luggage = body.luggage === undefined ? 0 : Number(body.luggage);
 
@@ -141,11 +147,11 @@ function validateBody(value: unknown) {
   if (!/^[a-z][a-z0-9_]{1,39}$/.test(vehicleType)) throw new RequestError('Choose a supported vehicle.', 400);
   if (!JOURNEY_TYPES.has(journeyType)) throw new RequestError('Choose a supported journey type.', 400);
   if (!['LKR', 'USD'].includes(currency)) throw new RequestError('Choose LKR or USD.', 400);
-  if (!Number.isInteger(passengers) || passengers < 1 || passengers > 14) {
-    throw new RequestError('Passenger count must be between 1 and 14.', 400);
+  if (!Number.isInteger(passengers) || passengers < 1 || passengers > 50) {
+    throw new RequestError('Passenger count must be between 1 and 50.', 400);
   }
-  if (!Number.isInteger(luggage) || luggage < 0 || luggage > 14) {
-    throw new RequestError('Luggage count must be between 0 and 14.', 400);
+  if (!Number.isInteger(luggage) || luggage < 0 || luggage > 50) {
+    throw new RequestError('Luggage count must be between 0 and 50.', 400);
   }
 
   let legs: BookingLeg[];
@@ -368,23 +374,43 @@ export async function POST(request: Request) {
     }
 
     if (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Booking creation failed.', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
-      } else {
-        console.error('Booking creation failed.', error.code);
+      console.error('Booking creation failed.', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      const rawMessage = (error.message ?? '').toLowerCase();
+      let status = 400;
+      let userMessage = 'We could not submit this booking. Please review the details and try again.';
+
+      if (error.code === '42501') {
+        status = 503;
+        userMessage = 'Booking submission is temporarily unavailable. Please try again shortly.';
+      } else if (
+        rawMessage.includes('vehicle category is unavailable') ||
+        rawMessage.includes('requested vehicle category is unavailable')
+      ) {
+        userMessage = 'The selected vehicle category is currently unavailable. Please choose another vehicle.';
+      } else if (rawMessage.includes('capacity is insufficient')) {
+        userMessage = 'The selected vehicle cannot accommodate this passenger or luggage count. Please choose a larger vehicle.';
+      } else if (rawMessage.includes('number of booking legs')) {
+        userMessage = 'The itinerary legs do not match the selected journey type.';
+      } else if (rawMessage.includes('each booking leg requires')) {
+        userMessage = 'Each trip leg requires a pickup location, drop-off location, and pickup time.';
+      } else if (
+        rawMessage.includes('booking leg schedule') ||
+        rawMessage.includes('follow the prior leg')
+      ) {
+        userMessage = 'Choose a future pickup date and time, and ensure any return or end time follows pickup.';
+      } else if (rawMessage.includes('booking details are invalid')) {
+        userMessage = 'Please review your contact details, passenger count, and trip schedule and try again.';
       }
-      const status = error.code === '42501' ? 403 : 400;
+
       return NextResponse.json(
         {
           success: false,
-          error: process.env.NODE_ENV === 'development'
-            ? error.message
-            : 'We could not submit this booking. Please review the details and try again.',
+          error: process.env.NODE_ENV === 'development' ? error.message : userMessage,
           ...(process.env.NODE_ENV === 'development' && {
             diagnostic: {
               code: error.code,

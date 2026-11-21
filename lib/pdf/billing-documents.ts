@@ -7,7 +7,7 @@ export const COMPANY_NAME = 'Chama Travel & Tours';
 export const COMPANY_ADDRESS = '152/1, Kahambilihena, Udathuththiripitiya, Gampaha, Sri Lanka';
 export const COMPANY_PHONE = '+94 71 111 4901';
 export const COMPANY_EMAIL = 'info@chamatravels.com';
-export const COMPANY_WEBSITE = 'chamatravels.com';
+export const COMPANY_WEBSITE = 'www.chamatravels.com';
 
 export const DEFAULT_INVOICE_CUSTOMER_NOTE =
   'Includes private air-conditioned vehicle, fuel, driver allowance, and highway tolls. Entrance tickets and personal expenses are excluded unless specified.';
@@ -340,17 +340,14 @@ async function drawBrandedHeader(params: {
   try {
     const logoBytes = decodeBase64ToBytes(PDF_LOGO_JPG_BASE64);
     const logoImg = await pdfDoc.embedJpg(logoBytes);
-    const targetHeight = 46;
-    const scale = targetHeight / logoImg.height;
-    const targetWidth = Math.min(100, logoImg.width * scale);
-    const finalHeight = (targetWidth / logoImg.width) * logoImg.height;
+    const dims = logoImg.scaleToFit(155, 158);
     page.drawImage(logoImg, {
       x: MARGIN_X,
-      y: topY - finalHeight + 6,
-      width: targetWidth,
-      height: finalHeight,
+      y: topY - dims.height + 6,
+      width: dims.width,
+      height: dims.height,
     });
-    leftY = topY - finalHeight - 10;
+    leftY = topY - dims.height - 14;
   } catch {
     // Graceful fallback if logo cannot be embedded
     leftY = topY - 4;

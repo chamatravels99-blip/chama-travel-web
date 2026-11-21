@@ -406,7 +406,7 @@ export default function BookingForm({
           result.data.tracker_token !== null &&
           !/^[0-9a-f]{64}$/i.test(result.data.tracker_token))
       ) {
-        throw new Error(result.error || 'Booking එක යැවීමේදී දෝෂයක් සිදු විය.');
+        throw new Error(result.error || 'We could not submit this booking. Please review the details and try again.');
       }
 
       const reference = result.data.booking_ref;
@@ -433,7 +433,7 @@ export default function BookingForm({
         }
       }
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Booking එක යැවීමේදී දෝෂයක් සිදු විය. නැවත උත්සාහ කරන්න.';
+      const errorMsg = err instanceof Error ? err.message : 'We could not submit this booking. Please review the details and try again.';
       setMessage({ type: 'error', text: errorMsg });
     } finally {
       submittingRef.current = false;
@@ -698,8 +698,8 @@ export default function BookingForm({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <label className="font-bold text-slate-700 uppercase">Passengers<input type="number" name="passengers" min="1" max="14" required value={formData.passengers} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
-        <label className="font-bold text-slate-700 uppercase">Luggage<input type="number" name="luggage" min="0" max="14" value={formData.luggage} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
+        <label className="font-bold text-slate-700 uppercase">Passengers<input type="number" name="passengers" min="1" max={vehicleCategories.find((item) => item.code === formData.vehicle_type)?.max_passengers ?? 50} required value={formData.passengers} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
+        <label className="font-bold text-slate-700 uppercase">Luggage<input type="number" name="luggage" min="0" max={vehicleCategories.find((item) => item.code === formData.vehicle_type)?.max_luggage ?? 50} value={formData.luggage} onChange={handleChange} className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800" /></label>
       </div>
 
       {/* Optional Promo Code Validation Box */}

@@ -67,9 +67,29 @@ export default function PricingPage() {
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="flex items-center justify-between gap-4">
-          <div><Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-blue-700"><ArrowLeft className="h-4 w-4" />Operations</Link><h1 className="mt-2 text-2xl font-black text-slate-900">Pricing management</h1><p className="text-sm text-slate-500">The quote engine reads active package and rule data; customer-provided totals are never used.</p></div>
-          <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white"><RefreshCw className="h-4 w-4" />Refresh</button>
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline">
+              <ArrowLeft className="h-4 w-4" />Operations
+            </Link>
+            <h1 className="mt-2 text-2xl font-black text-slate-900">Pricing management</h1>
+            <p className="mt-1 text-sm text-slate-500">The quote engine reads active package and rule data; customer-provided totals are never used.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link
+              href="/admin/fleet#vehicle-categories"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Manage Vehicle Categories
+            </Link>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800"
+            >
+              <RefreshCw className="h-4 w-4" />Refresh
+            </button>
+          </div>
         </header>
         {error && <p className="rounded-xl bg-red-50 p-4 text-sm text-red-800">{error}</p>}
         {notice && <p className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900" aria-live="polite">{notice}</p>}

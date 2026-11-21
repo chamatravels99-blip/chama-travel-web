@@ -22,7 +22,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import type { AppRole } from '@/lib/server/authorization';
 
@@ -71,6 +71,20 @@ export default function AdminShell({ children, email, displayName, roles }: Admi
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileOpen]);
 
   const allowedNavigation = navigation.filter((item) =>
     item.roles.some((role) => roles.includes(role))
@@ -192,7 +206,7 @@ export default function AdminShell({ children, email, displayName, roles }: Admi
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 lg:flex">
+    <div className="min-h-screen overflow-x-hidden bg-slate-50 lg:flex">
       <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] lg:flex ${collapsed ? 'w-20' : 'w-64'}`}>
         {sidebarContent()}
         <button
@@ -206,29 +220,36 @@ export default function AdminShell({ children, email, displayName, roles }: Admi
       </aside>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Admin navigation">
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
-            className="absolute inset-0 bg-slate-950/50"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs"
           />
-          <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-white shadow-2xl">
+          <aside className="relative flex h-[100dvh] w-[min(20rem,86vw)] flex-col bg-white shadow-2xl">
             {sidebarContent(true)}
           </aside>
         </div>
       )}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6 lg:justify-end">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open navigation"
-            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 backdrop-blur sm:px-6 lg:justify-end">
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-slate-700 hover:bg-slate-100 active:bg-slate-200"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-black tracking-wide text-slate-900">CHAMA TRAVELS</p>
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">Admin Portal</p>
+            </div>
+          </div>
           <div className="hidden items-center gap-3 lg:flex">
             <div className="text-right">
               <p className="max-w-64 truncate text-sm font-bold text-slate-800">{displayName}</p>
@@ -238,7 +259,9 @@ export default function AdminShell({ children, email, displayName, roles }: Admi
               {(displayName.trim()[0] || 'A').toUpperCase()}
             </div>
           </div>
-          <span className="text-xs font-bold text-slate-700 lg:hidden">CHAMA TRAVELS</span>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-black text-blue-700 lg:hidden" title={displayName}>
+            {(displayName.trim()[0] || 'A').toUpperCase()}
+          </div>
         </header>
         {logoutError && (
           <p role="alert" className="mx-4 mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 sm:mx-6">

@@ -262,30 +262,32 @@ export default function AdminDashboard() {
               Unified summary of incoming bookings, active trips, fleet availability, and verified payments.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <Link
               href="/admin/bookings"
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-800 shadow-sm"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-800"
             >
               <Clipboard className="h-4 w-4" /> Open Bookings Center
             </Link>
-            <Link
-              href="/admin/fleet"
-              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              Fleet &amp; Drivers
-            </Link>
-            <Link
-              href="/admin/payments"
-              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-            >
-              Payments &amp; Ledger
-            </Link>
+            <div className="grid grid-cols-2 gap-2 sm:contents">
+              <Link
+                href="/admin/fleet"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                Fleet &amp; Drivers
+              </Link>
+              <Link
+                href="/admin/payments"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                Payments &amp; Ledger
+              </Link>
+            </div>
             <button
               type="button"
               onClick={() => void load()}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
@@ -405,8 +407,62 @@ export default function AdminDashboard() {
           ) : recentBookings.length === 0 ? (
             <div className="p-10 text-center text-sm text-slate-500">No bookings match your search.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
+            <>
+              {/* Mobile Compact Cards */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {recentBookings.map((booking) => {
+                  const firstLeg = booking.legs[0];
+                  const paymentStatus = booking.financials?.payment_status ?? 'no_quote';
+                  const latestQuote = booking.quotes[0];
+                  const quoteTotal = booking.financials?.quote_total ?? latestQuote?.total;
+                  const quoteCurrency = booking.financials?.currency ?? latestQuote?.currency ?? booking.currency;
+
+                  return (
+                    <article key={`mobile-${booking.id}`} className="space-y-2.5 p-4 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-mono font-black text-slate-950">{booking.booking_ref}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(booking.booking_status)}`}>
+                            {booking.booking_status.replaceAll('_', ' ')}
+                          </span>
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset ${paymentBadgeClasses(paymentStatus)}`}>
+                            {paymentStatus === 'no_quote' ? 'No Quote' : paymentStatus.replaceAll('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{booking.customer_name}</p>
+                        <a href={`tel:${booking.customer_phone}`} className="text-xs font-medium text-blue-700 hover:underline">
+                          {booking.customer_phone}
+                        </a>
+                      </div>
+                      {firstLeg && (
+                        <p className="font-semibold text-slate-800">
+                          {firstLeg.pickup_location} → {firstLeg.dropoff_location}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                        <span>{firstLeg ? formatColomboDateTime(firstLeg.pickup_at) : '—'}</span>
+                        {quoteTotal !== undefined && (
+                          <span className="font-mono font-bold text-slate-800">
+                            {quoteCurrency} {Number(quoteTotal).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <Link
+                        href={`/admin/bookings?booking_id=${encodeURIComponent(booking.id)}`}
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700"
+                      >
+                        Manage Booking
+                      </Link>
+                    </article>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-xs text-slate-600">
                 <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="px-4 py-3.5">Reference</th>
@@ -496,7 +552,8 @@ export default function AdminDashboard() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
         </section>
 

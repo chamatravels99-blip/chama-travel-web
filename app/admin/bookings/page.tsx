@@ -1169,13 +1169,13 @@ export default function AdminBookingsPage() {
             Complete booking lifecycle: review requests, calculate quotes, assign fleet, record payments, and monitor trip progress.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           {/* View Mode Toggle: List View vs Booking Calendar */}
-          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1">
+          <div className="grid grid-cols-2 items-center rounded-xl border border-slate-200 bg-slate-100 p-1 sm:inline-flex">
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+              className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                 viewMode === 'list'
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -1186,7 +1186,7 @@ export default function AdminBookingsPage() {
             <button
               type="button"
               onClick={() => setViewMode('calendar')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+              className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                 viewMode === 'calendar'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -1196,24 +1196,26 @@ export default function AdminBookingsPage() {
             </button>
           </div>
 
-          {canOperate && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {canOperate && (
+              <button
+                type="button"
+                onClick={() => openManualBookingModal(viewMode === 'calendar' ? selectedCalendarDate : undefined)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              >
+                <Plus className="h-4 w-4" /> + Add Manual Booking
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => openManualBookingModal(viewMode === 'calendar' ? selectedCalendarDate : undefined)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              onClick={() => void loadBookings()}
+              disabled={loading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" /> + Add Manual Booking
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => void loadBookings()}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </button>
+          </div>
         </div>
       </header>
 
@@ -1354,7 +1356,7 @@ export default function AdminBookingsPage() {
       {/* Overview Statistics Grid */}
       {!loading && (
         <section aria-label="Booking statistics overview" className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Bookings</p>
               <p className="mt-1 text-2xl font-black text-slate-950">{metrics.total}</p>
@@ -1425,7 +1427,7 @@ export default function AdminBookingsPage() {
       {/* Quick Filter Tabs & Search Bar */}
       <section aria-label="Booking filters" className="space-y-3 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
         {/* Quick Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-slate-100 pb-3 sm:flex-wrap">
           {(
             [
               { id: 'all', label: 'All Bookings', count: bookings.length },
@@ -1966,8 +1968,84 @@ export default function AdminBookingsPage() {
             No bookings match these filters. Try adjusting your search or clearing filters.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
+          <>
+            {/* Mobile Compact Cards */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {visibleBookings.map((b) => {
+                const firstLeg = b.legs[0];
+                const latestQuote = b.quotes[0];
+                const assignedDriver = b.assignment ? driverById.get(b.assignment.driver_user_id) : undefined;
+                const assignedVehicle = b.assignment ? vehicleById.get(b.assignment.vehicle_id) : undefined;
+                const paymentStatus = b.financials?.payment_status ?? 'no_quote';
+                const quoteTotal = b.financials?.quote_total ?? latestQuote?.total;
+                const quoteCurrency = b.financials?.currency ?? latestQuote?.currency ?? b.currency;
+
+                return (
+                  <article
+                    key={`mobile-${b.id}`}
+                    onClick={() => setSelectedBookingId(b.id)}
+                    className="space-y-2.5 p-4 text-xs active:bg-blue-50/40"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono font-black text-slate-950">{b.booking_ref}</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(b.booking_status)}`}>
+                          {b.booking_status.replaceAll('_', ' ')}
+                        </span>
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset ${paymentBadgeClasses(paymentStatus)}`}>
+                          {paymentStatus === 'no_quote' ? 'No quote' : paymentStatus.replaceAll('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">{b.customer_name}</div>
+                      <div className="text-xs text-slate-500">{b.customer_phone}</div>
+                    </div>
+                    {firstLeg && (
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-slate-800">
+                          {firstLeg.pickup_location} → {firstLeg.dropoff_location}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {formatDate(firstLeg.pickup_at)} · {b.passenger_count} pax · {b.luggage_count} bags
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-mono font-bold text-slate-900">
+                        {quoteTotal !== undefined
+                          ? `${quoteCurrency} ${Number(quoteTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                          : 'Not quoted'}
+                      </span>
+                      {b.assignment ? (
+                        <span className="rounded-lg bg-emerald-50 px-2 py-0.5 font-bold text-emerald-800">
+                          {b.assignment.driver_name || assignedDriver?.full_name || 'Assigned'}
+                          {b.assignment.vehicle_name || assignedVehicle?.display_name
+                            ? ` · ${b.assignment.vehicle_name || assignedVehicle?.display_name}`
+                            : ''}
+                        </span>
+                      ) : (
+                        <span className="italic text-slate-400">Unassigned</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedBookingId(b.id);
+                      }}
+                      className="min-h-11 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700"
+                    >
+                      Manage Booking
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left text-xs text-slate-600">
               <thead className="border-b border-slate-200 bg-slate-50/80 font-bold uppercase tracking-wider text-slate-500 text-[11px]">
                 <tr>
                   <th className="px-4 py-3.5">Reference</th>
@@ -2079,7 +2157,8 @@ export default function AdminBookingsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         {/* Pagination Footer */}
@@ -2116,10 +2195,10 @@ export default function AdminBookingsPage() {
 
       {/* Comprehensive Booking Operations Workstation Modal */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6 backdrop-blur-sm overflow-y-auto">
-          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-6 backdrop-blur-sm overflow-y-auto">
+          <div className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col rounded-2xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-200">
             {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:px-6 sm:py-4">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-lg font-black text-slate-950">{selectedBooking.booking_ref}</span>
                 <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(selectedBooking.booking_status)}`}>
@@ -2258,7 +2337,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Navigation Tabs */}
-            <div className="flex border-b border-slate-200 bg-white px-6">
+            <div className="flex overflow-x-auto whitespace-nowrap border-b border-slate-200 bg-white px-4 sm:px-6">
               {[
                 { id: 'overview', label: '1. Customer & Trip Info' },
                 { id: 'quote', label: '2. Quotation & Pricing' },
@@ -2270,9 +2349,9 @@ export default function AdminBookingsPage() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveModalTab(tab.id as typeof activeModalTab)}
-                  className={`border-b-2 px-4 py-3 text-xs font-bold transition whitespace-nowrap ${
+                  className={`shrink-0 border-b-2 px-3.5 py-3 text-xs font-bold transition whitespace-nowrap sm:px-4 ${
                     activeModalTab === tab.id
-                      ? 'border-blue-600 text-blue-700'
+                      ? 'border-blue-600 bg-blue-50/40 text-blue-700'
                       : 'border-transparent text-slate-500 hover:text-slate-900'
                   }`}
                 >
@@ -2282,7 +2361,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
               {/* TAB 1: Customer & Trip Information */}
               {activeModalTab === 'overview' && (
                 <div className="space-y-6">
@@ -3211,10 +3290,10 @@ export default function AdminBookingsPage() {
 
       {/* "+ Add Manual Booking" Modal */}
       {showManualBookingModal && canOperate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 sm:p-6 backdrop-blur-sm overflow-y-auto">
-          <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-6 backdrop-blur-sm overflow-y-auto">
+          <div className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col rounded-2xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-200">
             {/* Modal Header */}
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:px-6 sm:py-4">
               <div>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800">
                   <Plus className="h-3.5 w-3.5" /> Direct Admin Entry
@@ -3233,7 +3312,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Form Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
               {/* 1. Booking Source */}
               <div className="space-y-2">
                 <span className="block text-xs font-extrabold uppercase tracking-wider text-slate-500">
@@ -3422,7 +3501,7 @@ export default function AdminBookingsPage() {
                     </label>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:col-span-2">
                     <label className="block text-xs font-bold text-slate-700">
                       Passengers (1–14)
                       <input

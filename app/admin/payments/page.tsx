@@ -520,13 +520,13 @@ function PaymentsPageContent() {
   return (
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="flex items-center justify-between gap-4">
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-blue-700"><ArrowLeft className="h-4 w-4" />Operations</Link>
-            <h1 className="mt-2 text-2xl font-black text-slate-900">Payments & refunds</h1>
-            <p className="text-sm text-slate-500">Admin and Super Admin only. Customer receipts are immutable, individually numbered ledger entries.</p>
+            <Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"><ArrowLeft className="h-4 w-4" />Operations</Link>
+            <h1 className="mt-2 text-2xl font-black text-slate-900">Payments &amp; refunds</h1>
+            <p className="mt-1 text-sm text-slate-500">Admin and Super Admin only. Customer receipts are immutable, individually numbered ledger entries.</p>
           </div>
-          <button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white"><RefreshCw className="h-4 w-4" />Refresh</button>
+          <button type="button" onClick={() => void load()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800"><RefreshCw className="h-4 w-4" />Refresh</button>
         </header>
         {bookingFilter && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
@@ -552,25 +552,25 @@ function PaymentsPageContent() {
           <div className="border-b border-slate-100 p-5">
             <h2 className="font-extrabold">Invoices &amp; receipts</h2>
             <p className="mt-1 text-xs text-slate-500">Search the booking-linked billing archive. Issuance and corrections remain in each booking&apos;s Billing &amp; Documents panel.</p>
-            <form onSubmit={(event) => void searchBillingDocuments(event)} className="mt-4 flex flex-wrap gap-2">
+            <form onSubmit={(event) => void searchBillingDocuments(event)} className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <input
                 value={billingSearchInput}
                 onChange={(event) => setBillingSearchInput(event.target.value)}
                 maxLength={100}
                 placeholder="Invoice, receipt, booking, or customer"
-                className="min-w-60 flex-1 rounded-xl border border-slate-200 p-2.5 text-sm"
+                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm sm:min-w-60 sm:flex-1"
               />
               <select
                 value={billingTypeInput}
                 onChange={(event) => setBillingTypeInput(event.target.value)}
-                className="rounded-xl border border-slate-200 p-2.5 text-sm"
+                className="w-full rounded-xl border border-slate-200 p-2.5 text-sm sm:w-auto"
                 aria-label="Billing document type"
               >
                 <option value="">All documents</option>
                 <option value="invoice">Invoices</option>
                 <option value="receipt">Receipts</option>
               </select>
-              <button type="submit" disabled={billingLoading} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
+              <button type="submit" disabled={billingLoading} className="min-h-11 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">
                 Search
               </button>
             </form>

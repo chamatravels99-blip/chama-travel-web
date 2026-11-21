@@ -108,30 +108,93 @@ export async function POST(request: Request) {
     }
 
     if (input.action === 'save_category') {
-      const id = input.category_id === null ? null : typeof input.category_id === 'string' ? input.category_id : '';
-      const code = typeof input.code === 'string' ? input.code.trim() : '';
+      const id =
+        input.category_id === null || input.category_id === undefined || input.category_id === ''
+          ? null
+          : typeof input.category_id === 'string'
+            ? input.category_id.trim()
+            : '';
+      const rawCode = typeof input.code === 'string' ? input.code.trim().toLowerCase() : '';
+      const code = rawCode.replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '');
       const displayName = typeof input.display_name === 'string' ? input.display_name.trim() : '';
       const maxPassengers = Number(input.max_passengers);
       const maxLuggage = Number(input.max_luggage);
-      if ((id !== null && (typeof id !== 'string' || !UUID_PATTERN.test(id))) ||
-          !/^[a-z][a-z0-9_]{1,39}$/.test(code) || displayName.length < 2 ||
-          !Number.isInteger(maxPassengers) || !Number.isInteger(maxLuggage) ||
-          typeof input.is_active !== 'boolean') {
-        return NextResponse.json({ success: false, error: 'Vehicle category details are invalid.' }, { status: 400 });
+      const isActive = input.is_active === undefined ? true : input.is_active;
+
+      if (id !== null && !UUID_PATTERN.test(id)) {
+        return NextResponse.json({ success: false, error: 'Invalid vehicle category identifier.' }, { status: 400 });
       }
+      if (!/^[a-z][a-z0-9_]{1,39}$/.test(code)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Category code must start with a letter and use 2–40 lowercase letters, numbers, or underscores (e.g. luxury_van).',
+          },
+          { status: 400 }
+        );
+      }
+      if (displayName.length < 2 || displayName.length > 80) {
+        return NextResponse.json(
+          { success: false, error: 'Display name must be between 2 and 80 characters.' },
+          { status: 400 }
+        );
+      }
+      if (!Number.isInteger(maxPassengers) || maxPassengers < 1 || maxPassengers > 50) {
+        return NextResponse.json(
+          { success: false, error: 'Max passengers must be a whole number between 1 and 50.' },
+          { status: 400 }
+        );
+      }
+      if (!Number.isInteger(maxLuggage) || maxLuggage < 0 || maxLuggage > 50) {
+        return NextResponse.json(
+          { success: false, error: 'Max luggage must be a whole number between 0 and 50.' },
+          { status: 400 }
+        );
+      }
+      if (typeof isActive !== 'boolean') {
+        return NextResponse.json(
+          { success: false, error: 'Active status must be true or false.' },
+          { status: 400 }
+        );
+      }
+
       const { data, error } = await supabase.rpc('save_vehicle_category', {
         p_category_id: id,
         p_code: code,
         p_display_name: displayName,
         p_max_passengers: maxPassengers,
         p_max_luggage: maxLuggage,
-        p_is_active: input.is_active,
+        p_is_active: isActive,
       });
       if (error) {
-        console.error('Vehicle category update failed.', error.code);
-        return NextResponse.json({ success: false, error: 'The vehicle category could not be saved.' }, { status: 409 });
+        console.error('Vehicle category update failed.', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        });
+        const msg = (error.message ?? '').toLowerCase();
+        if (error.code === '23505' || msg.includes('already exists')) {
+          return NextResponse.json(
+            { success: false, error: 'A vehicle category with this code already exists. Please choose a unique code.' },
+            { status: 409 }
+          );
+        }
+        if (msg.includes('admin is required')) {
+          return NextResponse.json(
+            { success: false, error: 'An active Admin account is required to manage vehicle categories.' },
+            { status: 403 }
+          );
+        }
+        return NextResponse.json(
+          { success: false, error: 'The vehicle category could not be saved. Please review the details and try again.' },
+          { status: 409 }
+        );
       }
-      return NextResponse.json({ success: true, data: { category_id: data } });
+      return NextResponse.json({
+        success: true,
+        data: { category_id: data },
+        message: id ? 'Vehicle category updated.' : 'Vehicle category created.',
+      });
     }
 
     if (input.action === 'save_vehicle') {

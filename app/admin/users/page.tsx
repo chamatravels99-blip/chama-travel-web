@@ -151,11 +151,11 @@ export default function UsersPage() {
           <h1 className="mt-1 text-2xl font-black text-slate-900">Users</h1>
           <p className="mt-1 text-sm text-slate-500">Manage accounts without deleting their business history.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
@@ -163,7 +163,7 @@ export default function UsersPage() {
             <button
               type="button"
               onClick={() => setShowCreateForm((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-800"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-800"
             >
               <UserPlus className="h-4 w-4" /> Create staff account
             </button>

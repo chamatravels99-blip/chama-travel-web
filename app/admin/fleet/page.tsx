@@ -86,6 +86,19 @@ const emptyDriverForm = (defaultCategoryId = ''): DriverFormState => ({
   new_vehicle_registration: '',
 });
 
+function slugifyCategoryCode(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s/-]+/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+  if (!normalized) return '';
+  return /^[a-z]/.test(normalized) ? normalized : `cat_${normalized}`.slice(0, 40);
+}
+
 export default function FleetPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -104,6 +117,7 @@ export default function FleetPage() {
     max_luggage: '2',
     is_active: true,
   });
+  const [categoryCodeTouched, setCategoryCodeTouched] = useState(false);
   const [vehicleForm, setVehicleForm] = useState({
     vehicle_id: '',
     category_id: '',
@@ -293,7 +307,7 @@ export default function FleetPage() {
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Link
               href="/admin/dashboard"
@@ -309,20 +323,58 @@ export default function FleetPage() {
               Register internal drivers and manage fleet vehicles for one-click booking dispatch. No driver login or password is required.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={openAddDriverModal}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow-xs hover:bg-blue-700 transition"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow-xs transition hover:bg-blue-700"
             >
               <UserPlus className="h-4 w-4" />
-              + Add New Driver
+              + Add Driver
             </button>
+            <div className="grid grid-cols-2 gap-2 sm:contents">
+              <button
+                type="button"
+                onClick={() => {
+                  setVehicleForm({
+                    vehicle_id: '',
+                    category_id: categories.find((c) => c.is_active)?.id ?? categories[0]?.id ?? '',
+                    display_name: '',
+                    registration_number: '',
+                    operational_status: 'active',
+                  });
+                  document.getElementById('fleet-vehicles-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
+              >
+                <Car className="h-4 w-4 text-emerald-600" />
+                + Add Vehicle
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryCodeTouched(false);
+                  setCategoryForm({
+                    category_id: '',
+                    code: '',
+                    display_name: '',
+                    max_passengers: '3',
+                    max_luggage: '2',
+                    is_active: true,
+                  });
+                  document.getElementById('vehicle-categories')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-800 transition hover:bg-slate-50"
+              >
+                <Truck className="h-4 w-4 text-amber-600" />
+                + Add Category
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => void load()}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -631,7 +683,7 @@ export default function FleetPage() {
         {/* Vehicles & Categories Management Grid */}
         <section className="grid gap-6 lg:grid-cols-2">
           {/* Vehicles Form & List */}
-          <div className="space-y-4">
+          <div id="fleet-vehicles-form" className="space-y-4">
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -831,33 +883,72 @@ export default function FleetPage() {
           </div>
 
           {/* Vehicle Categories Form & List */}
-          <div className="space-y-4">
+          <div id="vehicle-categories" className="space-y-4">
             <form
               onSubmit={(event) => {
                 event.preventDefault();
+                const normalizedCode = slugifyCategoryCode(categoryForm.code || categoryForm.display_name);
+                if (!/^[a-z][a-z0-9_]{1,39}$/.test(normalizedCode)) {
+                  setError('Category code must start with a letter and use 2–40 lowercase letters, numbers, or underscores (e.g. luxury_van).');
+                  return;
+                }
                 void save(
                   {
                     action: 'save_category',
                     category_id: categoryForm.category_id || null,
-                    code: categoryForm.code,
-                    display_name: categoryForm.display_name,
+                    code: normalizedCode,
+                    display_name: categoryForm.display_name.trim(),
                     max_passengers: Number(categoryForm.max_passengers),
                     max_luggage: Number(categoryForm.max_luggage),
                     is_active: categoryForm.is_active,
                   },
                   categoryForm.category_id ? 'Vehicle category updated.' : 'Vehicle category created.'
-                );
+                ).then((ok) => {
+                  if (ok && !categoryForm.category_id) {
+                    setCategoryCodeTouched(false);
+                    setCategoryForm({
+                      category_id: '',
+                      code: '',
+                      display_name: '',
+                      max_passengers: '3',
+                      max_luggage: '2',
+                      is_active: true,
+                    });
+                  }
+                });
               }}
               className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3 shadow-xs"
             >
-              <h2 className="font-black text-slate-900 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-amber-600" />
-                Vehicle Categories
-              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-black text-slate-900 flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-amber-600" />
+                  Vehicle Categories
+                </h2>
+                {categoryForm.category_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryCodeTouched(false);
+                      setCategoryForm({
+                        category_id: '',
+                        code: '',
+                        display_name: '',
+                        max_passengers: '3',
+                        max_luggage: '2',
+                        is_active: true,
+                      });
+                    }}
+                    className="text-xs font-bold text-blue-600 hover:underline"
+                  >
+                    + New Category Mode
+                  </button>
+                )}
+              </div>
               <select
                 value={categoryForm.category_id}
                 onChange={(event) => {
                   const selected = categories.find((category) => category.id === event.target.value);
+                  setCategoryCodeTouched(Boolean(selected));
                   setCategoryForm(
                     selected
                       ? {
@@ -887,18 +978,7 @@ export default function FleetPage() {
                   </option>
                 ))}
               </select>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Category Code</label>
-                  <input
-                    required
-                    pattern="[a-z][a-z0-9_]{1,39}"
-                    value={categoryForm.code}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, code: event.target.value })}
-                    placeholder="e.g. sedan, luxury_van"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Display Name</label>
                   <input
@@ -906,10 +986,31 @@ export default function FleetPage() {
                     minLength={2}
                     maxLength={80}
                     value={categoryForm.display_name}
-                    onChange={(event) => setCategoryForm({ ...categoryForm, display_name: event.target.value })}
+                    onChange={(event) => {
+                      const nextName = event.target.value;
+                      setCategoryForm((prev) => ({
+                        ...prev,
+                        display_name: nextName,
+                        code: !prev.category_id && !categoryCodeTouched ? slugifyCategoryCode(nextName) : prev.code,
+                      }));
+                    }}
                     placeholder="e.g. Luxury Van / KDH"
                     className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
                   />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Category Code</label>
+                  <input
+                    required
+                    value={categoryForm.code}
+                    onChange={(event) => {
+                      setCategoryCodeTouched(true);
+                      setCategoryForm({ ...categoryForm, code: event.target.value.toLowerCase().replace(/[\s-]+/g, '_') });
+                    }}
+                    placeholder="e.g. sedan, luxury_van"
+                    className="w-full rounded-xl border border-slate-200 p-2.5 font-mono text-sm"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">Lowercase letters, numbers, underscores (auto-filled from name)</p>
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Max Passengers</label>
@@ -948,7 +1049,7 @@ export default function FleetPage() {
               </label>
               <button
                 disabled={busy}
-                className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50"
+                className="min-h-11 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
               >
                 {categoryForm.category_id ? 'Update Category' : 'Save Category'}
               </button>
@@ -961,7 +1062,7 @@ export default function FleetPage() {
               </h3>
               <div className="divide-y divide-slate-100">
                 {categories.map((category) => (
-                  <div key={category.id} className="flex items-center justify-between gap-3 py-3 text-xs">
+                  <div key={category.id} className="flex flex-col gap-2.5 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="font-bold text-slate-900">
                         {category.display_name}{' '}
@@ -971,7 +1072,7 @@ export default function FleetPage() {
                         Max {category.max_passengers} passenger(s) · {category.max_luggage} bag(s)
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
                           category.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
@@ -981,7 +1082,33 @@ export default function FleetPage() {
                       </span>
                       <button
                         type="button"
+                        disabled={busy}
                         onClick={() =>
+                          void save(
+                            {
+                              action: 'save_category',
+                              category_id: category.id,
+                              code: category.code,
+                              display_name: category.display_name,
+                              max_passengers: category.max_passengers,
+                              max_luggage: category.max_luggage,
+                              is_active: !category.is_active,
+                            },
+                            `Category "${category.display_name}" ${category.is_active ? 'deactivated' : 'activated'}.`
+                          )
+                        }
+                        className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition disabled:opacity-50 ${
+                          category.is_active
+                            ? 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                            : 'border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {category.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCategoryCodeTouched(true);
                           setCategoryForm({
                             category_id: category.id,
                             code: category.code,
@@ -989,9 +1116,9 @@ export default function FleetPage() {
                             max_passengers: String(category.max_passengers),
                             max_luggage: String(category.max_luggage),
                             is_active: category.is_active,
-                          })
-                        }
-                        className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
+                          });
+                        }}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-100"
                       >
                         Edit
                       </button>
@@ -1006,9 +1133,9 @@ export default function FleetPage() {
 
       {/* Add / Edit Driver Modal */}
       {driverModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden max-h-[92dvh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-50">
               <div>
                 <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-blue-600" />
@@ -1027,7 +1154,7 @@ export default function FleetPage() {
               </button>
             </div>
 
-            <form onSubmit={(e) => void handleSaveDriver(e)} className="p-6 space-y-4 overflow-y-auto text-xs">
+            <form onSubmit={(e) => void handleSaveDriver(e)} className="p-4 sm:p-6 space-y-4 overflow-y-auto text-xs">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block font-extrabold text-slate-700 mb-1">
