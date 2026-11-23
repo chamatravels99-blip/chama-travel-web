@@ -23,7 +23,6 @@ import {
   DollarSign,
   ExternalLink,
   FileText,
-  Info,
   List,
   MapPin,
   Plus,
@@ -365,7 +364,6 @@ export default function AdminBookingsPage() {
     configured: false,
     calendar_id: 'primary',
   });
-  const [showGCalSetupGuide, setShowGCalSetupGuide] = useState(false);
   const [syncingAllGCal, setSyncingAllGCal] = useState(false);
 
   // "+ Add Manual Booking" Modal State
@@ -747,11 +745,6 @@ export default function AdminBookingsPage() {
     });
   }, [calendarMonth]);
 
-  const syncedBookingsCount = useMemo(
-    () => bookings.filter((b) => Boolean(b.google_calendar_event_id)).length,
-    [bookings]
-  );
-
   function openManualBookingModal(prefillDate?: string) {
     const targetDate = prefillDate || colomboDateKey(new Date().toISOString());
     setManualPickupDate(targetDate);
@@ -870,10 +863,9 @@ export default function AdminBookingsPage() {
       });
       const result = (await response.json()) as OperationResponse;
       if (result.configured === false) {
-        setShowGCalSetupGuide(true);
         setNotice(
           result.error ||
-            'Google Calendar credentials are not configured yet. Follow the 3-step setup guide to activate real-time sync.'
+            'Google Calendar credentials are not configured yet.'
         );
         return;
       }
@@ -903,10 +895,9 @@ export default function AdminBookingsPage() {
       });
       const result = (await response.json()) as OperationResponse;
       if (result.configured === false) {
-        setShowGCalSetupGuide(true);
         setNotice(
           result.error ||
-            'Google Calendar credentials are not configured yet. Follow the 3-step setup guide below to activate live sync.'
+            'Google Calendar credentials are not configured yet.'
         );
         return;
       }
@@ -1237,28 +1228,14 @@ export default function AdminBookingsPage() {
                 Google Calendar: Setup Pending
               </span>
             )}
-            <span className="text-xs text-slate-600">
-              {googleCalendarInfo.configured ? (
-                <>
-                  Calendar ID: <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-800">{googleCalendarInfo.calendar_id}</code> ·{' '}
-                  <b>{syncedBookingsCount}</b> booking(s) synced
-                </>
-              ) : (
-                'Auto-syncs confirmed, assigned, completed, and cancelled trips with your Google Calendar once Service Account credentials are set.'
-              )}
-            </span>
+            {!googleCalendarInfo.configured && (
+              <span className="text-xs text-slate-600">
+                Auto-syncs confirmed, assigned, completed, and cancelled trips with your Google Calendar once Service Account credentials are set.
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowGCalSetupGuide((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
-            >
-              <Info className="h-3.5 w-3.5 text-blue-600" />
-              {showGCalSetupGuide ? 'Hide Setup Guide' : 'Google Calendar Setup Guide'}
-            </button>
-
             {canOperate && (
               <button
                 type="button"
@@ -1272,42 +1249,6 @@ export default function AdminBookingsPage() {
             )}
           </div>
         </div>
-
-        {showGCalSetupGuide && (
-          <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/50 p-4 text-xs text-slate-700 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-900 text-sm">
-                3-Step Google Calendar API v3 Service Account Setup (Cloudflare &amp; Next.js Compatible)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowGCalSetupGuide(false)}
-                className="text-slate-400 hover:text-slate-700"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <ol className="list-decimal pl-5 space-y-1.5 text-xs text-slate-700">
-              <li>
-                <b>Enable Google Calendar API &amp; Create Service Account:</b> In Google Cloud Console, enable the{' '}
-                <i>Google Calendar API</i>, create a Service Account, and download its JSON key file.
-              </li>
-              <li>
-                <b>Share Your Google Calendar:</b> Open Google Calendar → Settings for your Chama Travels calendar →{' '}
-                <i>Share with specific people</i> → add your Service Account email with{' '}
-                <b>&ldquo;Make changes to events&rdquo;</b> permission.
-              </li>
-              <li>
-                <b>Set Environment Variables in Cloudflare / <code className="font-mono">.env.local</code>:</b>
-                <div className="mt-2 rounded-xl bg-slate-900 p-3 font-mono text-[11px] text-slate-100 space-y-1 overflow-x-auto">
-                  <div>GOOGLE_SERVICE_ACCOUNT_EMAIL=&quot;chama-calendar-sync@your-project.iam.gserviceaccount.com&quot;</div>
-                  <div>GOOGLE_PRIVATE_KEY=&quot;-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n&quot;</div>
-                  <div>GOOGLE_CALENDAR_ID=&quot;your-calendar-id@group.calendar.google.com&quot;</div>
-                </div>
-              </li>
-            </ol>
-          </div>
-        )}
       </section>
 
       {/* Notifications */}
@@ -2195,10 +2136,10 @@ export default function AdminBookingsPage() {
 
       {/* Comprehensive Booking Operations Workstation Modal */}
       {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-6 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 sm:p-6 backdrop-blur-sm overflow-hidden">
           <div className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col rounded-2xl sm:rounded-3xl bg-white shadow-2xl overflow-hidden border border-slate-200">
             {/* Modal Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:px-6 sm:py-4">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-lg font-black text-slate-950">{selectedBooking.booking_ref}</span>
                 <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ring-1 ring-inset ${statusBadgeClasses(selectedBooking.booking_status)}`}>
@@ -2264,7 +2205,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Quick Status Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-white px-6 py-2.5 text-xs">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-white px-4 py-2 sm:px-6 sm:py-2.5 text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-600">Next Recommended Step:</span>
                 <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold text-slate-800">
@@ -2337,7 +2278,11 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Navigation Tabs */}
-            <div className="flex overflow-x-auto whitespace-nowrap border-b border-slate-200 bg-white px-4 sm:px-6">
+            <div
+              role="tablist"
+              aria-label="Booking operations sections"
+              className="shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 border-b border-slate-200 bg-slate-50/60 p-2.5 sm:px-6 sm:py-2.5"
+            >
               {[
                 { id: 'overview', label: '1. Customer & Trip Info' },
                 { id: 'quote', label: '2. Quotation & Pricing' },
@@ -2348,11 +2293,15 @@ export default function AdminBookingsPage() {
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeModalTab === tab.id}
                   onClick={() => setActiveModalTab(tab.id as typeof activeModalTab)}
-                  className={`shrink-0 border-b-2 px-3.5 py-3 text-xs font-bold transition whitespace-nowrap sm:px-4 ${
+                  className={`rounded-xl border px-3 py-2 text-left sm:text-center text-xs font-bold leading-snug transition ${
+                    tab.id === 'activity' ? 'col-span-2 sm:col-span-1' : ''
+                  } ${
                     activeModalTab === tab.id
-                      ? 'border-blue-600 bg-blue-50/40 text-blue-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900'
+                      ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
                   }`}
                 >
                   {tab.label}
@@ -2361,7 +2310,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
               {/* TAB 1: Customer & Trip Information */}
               {activeModalTab === 'overview' && (
                 <div className="space-y-6">
@@ -3177,7 +3126,7 @@ export default function AdminBookingsPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 flex justify-between items-center text-xs text-slate-500">
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6 flex flex-wrap justify-between items-center gap-2 text-xs text-slate-500">
               <span>Status transitions are validated server-side to guarantee audit history integrity.</span>
               <button
                 type="button"

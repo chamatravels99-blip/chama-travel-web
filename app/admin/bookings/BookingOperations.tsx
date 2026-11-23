@@ -208,7 +208,7 @@ export default function BookingOperations({
       {/* Trip Leg Expected End Times (Required by DB before quote issuance) */}
       {editableSchedule && (
         <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-200/80 space-y-2.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-1">
             <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 text-slate-500" /> Trip Leg Expected End Time (Sri Lanka Time)
             </span>
@@ -252,7 +252,7 @@ export default function BookingOperations({
       {quotable ? (
         <div className="space-y-4">
           {suggestion !== null && (
-            <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-xs">
               <span className="font-bold text-blue-950">
                 Pricing-Rule Suggested Total: {quoteCurrency} {suggestion}
               </span>

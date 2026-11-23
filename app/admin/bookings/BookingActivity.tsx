@@ -254,7 +254,7 @@ export default function BookingActivity({ bookingId }: { bookingId: string }) {
           <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
             <Clock className="h-4 w-4 text-blue-600" /> Chronological Booking Timeline
           </h4>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
                 { id: 'all', label: `All (${notes.length + events.length})` },
