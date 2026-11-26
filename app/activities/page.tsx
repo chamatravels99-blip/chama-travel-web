@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
+import ScrollReveal from "../components/ScrollReveal";
 import {
   ACTIVITY_CATEGORIES,
   type ActivityRecord,
@@ -60,21 +61,21 @@ export default function ActivitiesPage() {
 
       {/* HERO BANNER */}
       <section className="relative flex min-h-[50vh] items-center justify-center overflow-hidden pt-28 pb-16">
-        <div className="absolute inset-0 bg-[url('/images/activiyhedder.jpg')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('/images/activiyhedder.jpg')] bg-cover bg-center animate-hero-bg" />
         <div className="absolute inset-0 bg-slate-900/65" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             Unforgettable Experiences
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-hero-title">
             Things to Do in <br />
             <span className="text-blue-200">Sri Lanka</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 animate-hero-subtitle">
             From wildlife safaris and mountain hikes to cultural village tours and whale watching across the island.
           </p>
         </div>
@@ -82,7 +83,7 @@ export default function ActivitiesPage() {
 
       {/* ACTIVITIES GRID */}
       <section className="px-4 py-16 sm:px-6 lg:px-8 max-w-[1400px] mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-8">
+        <ScrollReveal variant="fade-up" className="text-center max-w-2xl mx-auto mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
             Curated Adventures
           </p>
@@ -92,7 +93,7 @@ export default function ActivitiesPage() {
           <p className="mt-3 text-slate-600 text-sm">
             Click on any activity card to view full details and inquire via WhatsApp.
           </p>
-        </div>
+        </ScrollReveal>
 
         {/* Category Filter Pills */}
         <div className="mb-10 flex flex-wrap items-center justify-center gap-2">
@@ -114,21 +115,21 @@ export default function ActivitiesPage() {
 
         {/* 4 Cards per row on desktop */}
         <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {visibleActivities.map((act) => (
-            <article
-              key={act.id || act.slug}
-              role="button"
-              tabIndex={0}
-              aria-label={`View details for ${act.title}`}
-              onClick={() => setSelectedActivity(act)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedActivity(act);
-                }
-              }}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md shadow-slate-200/40 transition duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            >
+          {visibleActivities.map((act, idx) => (
+            <ScrollReveal key={act.id || act.slug} variant="fade-up" delay={(idx % 4) * 70} className="h-full">
+              <article
+                role="button"
+                tabIndex={0}
+                aria-label={`View details for ${act.title}`}
+                onClick={() => setSelectedActivity(act)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedActivity(act);
+                  }
+                }}
+                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md shadow-slate-200/40 transition duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:border-blue-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
               <div className="relative aspect-[16/11] overflow-hidden bg-slate-100">
                 <Image
                   src={act.image_url}
@@ -156,7 +157,8 @@ export default function ActivitiesPage() {
                   {act.description}
                 </p>
               </div>
-            </article>
+              </article>
+            </ScrollReveal>
           ))}
         </div>
       </section>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import ScrollReveal from "../components/ScrollReveal";
 import {
   FALLBACK_GALLERY_PHOTOS,
   GALLERY_CATEGORIES,
@@ -81,13 +82,13 @@ export default function GalleryPage() {
     <main className="min-h-screen bg-slate-50 flex flex-col justify-between py-16 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl w-full pt-12">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700">
+          <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700 animate-hero-badge">
             CHAMA TRAVELS GALLERY
           </p>
-          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl animate-hero-title">
             Photo Collection
           </h1>
-          <p className="mt-4 text-base leading-7 text-zinc-600 sm:text-lg">
+          <p className="mt-4 text-base leading-7 text-zinc-600 sm:text-lg animate-hero-subtitle">
             Explore our collection of memories, breathtaking landscapes, and unforgettable journeys across Sri Lanka.
           </p>
         </div>
@@ -116,37 +117,42 @@ export default function GalleryPage() {
         {/* Photos Grid */}
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {visiblePhotos.map((photo, index) => (
-            <div
+            <ScrollReveal
               key={photo.id || `${photo.image_url}-${index}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`View photo ${index + 1}: ${photo.alt_text}`}
-              onClick={() => setActiveGalleryIndex(index)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setActiveGalleryIndex(index);
-                }
-              }}
-              className="group relative overflow-hidden rounded-2xl bg-white shadow-md transition hover:shadow-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              variant="zoom-in"
+              delay={(index % 3) * 80}
             >
-              <div className="h-72 w-full overflow-hidden">
-                <Image
-                  src={photo.image_url}
-                  alt={photo.alt_text}
-                  width={800}
-                  height={600}
-                  unoptimized={!isOptimizableImageUrl(photo.image_url)}
-                  priority={index === 0}
-                  className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                />
-              </div>
-              {photo.title && (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/25 to-transparent px-4 py-3 opacity-0 transition duration-300 group-hover:opacity-100">
-                  <p className="text-sm font-bold text-white">{photo.title}</p>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`View photo ${index + 1}: ${photo.alt_text}`}
+                onClick={() => setActiveGalleryIndex(index)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setActiveGalleryIndex(index);
+                  }
+                }}
+                className="group relative overflow-hidden rounded-2xl bg-white shadow-md transition duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <div className="h-72 w-full overflow-hidden">
+                  <Image
+                    src={photo.image_url}
+                    alt={photo.alt_text}
+                    width={800}
+                    height={600}
+                    unoptimized={!isOptimizableImageUrl(photo.image_url)}
+                    priority={index === 0}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  />
                 </div>
-              )}
-            </div>
+                {photo.title && (
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/25 to-transparent px-4 py-3 opacity-0 transition duration-300 group-hover:opacity-100">
+                    <p className="text-sm font-bold text-white">{photo.title}</p>
+                  </div>
+                )}
+              </div>
+            </ScrollReveal>
           ))}
         </div>
       </div>

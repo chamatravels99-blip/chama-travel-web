@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { GuestQuoteAcceptance } from './guest-quote-acceptance';
 
 export const metadata: Metadata = {
-  title: 'Accept your Chama Travels quote',
+  title: 'Review & Confirm Your Chama Travels Quotation',
   robots: { index: false, follow: false },
   referrer: 'no-referrer',
 };

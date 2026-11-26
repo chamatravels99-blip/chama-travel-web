@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import ScrollReveal from "./ScrollReveal";
 
 export type HomeDestinationItem = {
   id?: string;
@@ -169,7 +170,7 @@ export default function Destinations({ items }: DestinationsProps) {
   return (
     <section id="destinations" className="bg-slate-50 px-4 py-20 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mx-auto max-w-3xl text-center">
+        <ScrollReveal variant="fade-up" className="mx-auto max-w-3xl text-center">
           <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">
             Discover
           </p>
@@ -179,7 +180,7 @@ export default function Destinations({ items }: DestinationsProps) {
           <p className="mt-4 text-base leading-7 text-zinc-600 sm:text-lg">
             Explore the most beautiful and iconic locations across Sri Lanka.
           </p>
-        </div>
+        </ScrollReveal>
 
         <div className="relative mt-12 @container">
           <div
@@ -237,14 +238,14 @@ export default function Destinations({ items }: DestinationsProps) {
           </button>
         </div>
 
-        <div className="mt-8 flex justify-center">
+        <ScrollReveal variant="fade-up" delay={120} className="mt-8 flex justify-center">
           <a
             href="/destinations"
             className="inline-flex min-h-12 items-center justify-center rounded-full border border-blue-200 bg-white px-8 py-3 text-sm font-bold text-blue-700 shadow-[0_4px_14px_rgba(0,0,0,0.05)] transition hover:-translate-y-0.5 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             explore Destinations →
           </a>
-        </div>
+        </ScrollReveal>
       </div>
     </section>
   );

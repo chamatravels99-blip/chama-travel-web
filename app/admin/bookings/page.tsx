@@ -6,6 +6,7 @@ import BookingActivity from './BookingActivity';
 import BookingBillingPanel from './BookingBillingPanel';
 import {
   customerWhatsAppUrl,
+  formatDriverTripDispatchMessage,
   formatTripDispatchMessage,
   whatsAppLink,
 } from '@/lib/whatsapp';
@@ -334,6 +335,7 @@ export default function AdminBookingsPage() {
   const [acceptanceLink, setAcceptanceLink] = useState<{ bookingId: string; url: string } | null>(null);
   const [dispatchPreviewBooking, setDispatchPreviewBooking] = useState<Booking | null>(null);
   const [dispatchCopied, setDispatchCopied] = useState(false);
+  const [driverDispatchCopied, setDriverDispatchCopied] = useState(false);
   const [now, setNow] = useState(0);
   const [showQuickAddDriver, setShowQuickAddDriver] = useState(false);
   const [fleetCategories, setFleetCategories] = useState<FleetCategoryOption[]>([]);
@@ -1050,17 +1052,20 @@ export default function AdminBookingsPage() {
     }
   }
 
-  async function recordWhatsAppConfirmation(quoteId: string) {
-    if (!window.confirm('Record that the customer accepted this quote through WhatsApp?')) return;
+  async function recordWhatsAppConfirmation(quoteId: string, bookingId?: string) {
+    if (!window.confirm('Confirm this manual quotation now? The quote will be marked accepted, the booking confirmed, and Tab 3 (Driver & Fleet Dispatch) unlocked.')) return;
     setSavingAction(quoteId);
     setNotice('');
     setError('');
     try {
       await postOperation({ action: 'record_whatsapp_confirmation', quote_id: quoteId });
-      setNotice('WhatsApp confirmation recorded and the booking is confirmed.');
+      if (bookingId) {
+        setAcceptanceLink((current) => (current?.bookingId === bookingId ? null : current));
+      }
       await loadBookings();
+      setNotice('Quotation confirmed! Booking status is now Confirmed — you can now assign a driver & vehicle in Tab 3.');
     } catch (operationError) {
-      setError(operationError instanceof Error ? operationError.message : 'WhatsApp confirmation could not be recorded.');
+      setError(operationError instanceof Error ? operationError.message : 'Manual quotation confirmation could not be recorded.');
     } finally {
       setSavingAction('');
     }
@@ -2311,6 +2316,39 @@ export default function AdminBookingsPage() {
 
             {/* Modal Body */}
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+              {notice && (
+                <div
+                  aria-live="polite"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-900"
+                >
+                  <span>{notice}</span>
+                  <button
+                    type="button"
+                    onClick={() => setNotice('')}
+                    className="rounded-lg p-1 text-emerald-700 hover:bg-emerald-100"
+                    aria-label="Dismiss notice"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-900"
+                >
+                  <span>{error}</span>
+                  <button
+                    type="button"
+                    onClick={() => setError('')}
+                    className="rounded-lg p-1 text-rose-700 hover:bg-rose-100"
+                    aria-label="Dismiss error"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* TAB 1: Customer & Trip Information */}
               {activeModalTab === 'overview' && (
                 <div className="space-y-6">
@@ -2570,13 +2608,13 @@ export default function AdminBookingsPage() {
                                 <button
                                   type="button"
                                   disabled={savingAction === quote.id}
-                                  onClick={() => void recordWhatsAppConfirmation(quote.id)}
+                                  onClick={() => void recordWhatsAppConfirmation(quote.id, selectedBooking.id)}
                                   className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50 transition"
                                 >
                                   <CheckCircle className="h-3.5 w-3.5" />
                                   {savingAction === quote.id
                                     ? 'Confirming…'
-                                    : 'Confirm Quote Manually (Admin Override)'}
+                                    : 'Confirm Manual Quotation'}
                                 </button>
                               )}
 
@@ -2935,69 +2973,155 @@ export default function AdminBookingsPage() {
                               </div>
                             )}
 
-                            {/* In-Tab Instant Customer WhatsApp Dispatch Card */}
+                            {/* In-Tab Instant Customer & Driver WhatsApp Dispatch Cards */}
                             {(() => {
                               const leg = selectedBooking.legs[0];
+                              const lastLeg = selectedBooking.legs[selectedBooking.legs.length - 1] ?? leg;
                               const driver = driverById.get(selectedBooking.assignment.driver_user_id);
                               const vehicle = vehicleById.get(selectedBooking.assignment.vehicle_id);
+                              const resolvedDriverName =
+                                selectedBooking.assignment.driver_name || driver?.full_name || 'Assigned Driver';
+                              const resolvedDriverPhone =
+                                selectedBooking.assignment.driver_phone || driver?.phone || null;
+                              const resolvedVehicleName =
+                                selectedBooking.assignment.vehicle_name || vehicle?.display_name || 'Chama Travels Vehicle';
+                              const resolvedVehicleReg =
+                                selectedBooking.assignment.vehicle_registration || vehicle?.registration_number || null;
+
                               const dispatchMsg = formatTripDispatchMessage({
                                 bookingRef: selectedBooking.booking_ref,
                                 customerName: selectedBooking.customer_name,
                                 serviceType: selectedBooking.service_type,
                                 journeyType: selectedBooking.journey_type,
                                 pickupLocation: leg?.pickup_location ?? 'As agreed',
-                                dropoffLocation: leg?.dropoff_location ?? 'As agreed',
+                                dropoffLocation: lastLeg?.dropoff_location ?? 'As agreed',
                                 pickupTimeColombo: leg ? formatDate(leg.pickup_at) : 'To be confirmed',
-                                driverName: selectedBooking.assignment.driver_name || driver?.full_name || 'Assigned Driver',
-                                driverPhone: selectedBooking.assignment.driver_phone || driver?.phone || null,
-                                vehicleName: selectedBooking.assignment.vehicle_name || vehicle?.display_name || 'Chama Travels Vehicle',
-                                vehicleRegistration: selectedBooking.assignment.vehicle_registration || vehicle?.registration_number || null,
+                                driverName: resolvedDriverName,
+                                driverPhone: resolvedDriverPhone,
+                                vehicleName: resolvedVehicleName,
+                                vehicleRegistration: resolvedVehicleReg,
                                 passengerCount: selectedBooking.passenger_count,
                               });
                               const customerWaUrl = customerWhatsAppUrl(selectedBooking.customer_phone, dispatchMsg);
 
+                              const routeSummary =
+                                selectedBooking.legs.length > 1
+                                  ? selectedBooking.legs
+                                      .map((l) => `Leg ${l.sequence_no}: ${l.pickup_location} → ${l.dropoff_location}`)
+                                      .join(' | ')
+                                  : lastLeg?.dropoff_location ?? 'As agreed';
+
+                              const driverDispatchMsg = formatDriverTripDispatchMessage({
+                                bookingRef: selectedBooking.booking_ref,
+                                driverName: resolvedDriverName,
+                                customerName: selectedBooking.customer_name,
+                                customerPhone: selectedBooking.customer_phone,
+                                pickupTimeColombo: leg ? formatDate(leg.pickup_at) : 'To be confirmed',
+                                pickupLocation: leg?.pickup_location ?? 'As agreed',
+                                dropoffLocation: lastLeg?.dropoff_location ?? 'As agreed',
+                                routeSummary,
+                                passengerCount: selectedBooking.passenger_count,
+                                luggageCount: selectedBooking.luggage_count,
+                                vehicleName: resolvedVehicleName,
+                                vehicleRegistration: resolvedVehicleReg,
+                                customerNotes: selectedBooking.customer_notes,
+                              });
+                              const driverWaUrl = customerWhatsAppUrl(resolvedDriverPhone, driverDispatchMsg);
+
                               return (
-                                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div>
-                                      <h4 className="text-xs font-extrabold text-emerald-950">
-                                        Send Driver &amp; Vehicle Info via WhatsApp
-                                      </h4>
-                                      <p className="text-[11px] text-emerald-800">
-                                        100% manual dispatch — preview, copy, or open WhatsApp for {selectedBooking.customer_name}.
-                                      </p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          void navigator.clipboard.writeText(dispatchMsg);
-                                          setDispatchCopied(true);
-                                          setTimeout(() => setDispatchCopied(false), 3000);
-                                        }}
-                                        className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition"
-                                      >
-                                        {dispatchCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clipboard className="h-3.5 w-3.5" />}
-                                        {dispatchCopied ? 'Copied!' : 'Copy Message'}
-                                      </button>
-                                      {customerWaUrl && (
-                                        <a
-                                          href={customerWaUrl}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 transition shadow-sm"
+                                <div className="grid gap-4 lg:grid-cols-2">
+                                  {/* Customer WhatsApp Card */}
+                                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <h4 className="text-xs font-extrabold text-emerald-950">
+                                          Send Driver &amp; Vehicle Info to Customer via WhatsApp
+                                        </h4>
+                                        <p className="text-[11px] text-emerald-800">
+                                          Preview, copy, or open WhatsApp for {selectedBooking.customer_name}.
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void navigator.clipboard.writeText(dispatchMsg);
+                                            setDispatchCopied(true);
+                                            setTimeout(() => setDispatchCopied(false), 3000);
+                                          }}
+                                          className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition"
                                         >
-                                          <ExternalLink className="h-3.5 w-3.5" /> Open WhatsApp
-                                        </a>
-                                      )}
+                                          {dispatchCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                          {dispatchCopied ? 'Copied!' : 'Copy Message'}
+                                        </button>
+                                        {customerWaUrl && (
+                                          <a
+                                            href={customerWaUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 transition shadow-sm"
+                                          >
+                                            <ExternalLink className="h-3.5 w-3.5" /> Open WhatsApp
+                                          </a>
+                                        )}
+                                      </div>
                                     </div>
+                                    <textarea
+                                      readOnly
+                                      rows={9}
+                                      value={dispatchMsg}
+                                      className="w-full rounded-xl border border-emerald-200 bg-white p-3 font-mono text-xs text-slate-800 focus:outline-none"
+                                    />
                                   </div>
-                                  <textarea
-                                    readOnly
-                                    rows={7}
-                                    value={dispatchMsg}
-                                    className="w-full rounded-xl border border-emerald-200 bg-white p-3 font-mono text-xs text-slate-800 focus:outline-none"
-                                  />
+
+                                  {/* Driver WhatsApp Card */}
+                                  <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <h4 className="text-xs font-extrabold text-blue-950">
+                                          Send Trip Details to Driver via WhatsApp
+                                        </h4>
+                                        <p className="text-[11px] text-blue-800">
+                                          Send pickup, route, passenger &amp; vehicle briefing to {resolvedDriverName}
+                                          {resolvedDriverPhone ? ` (${resolvedDriverPhone})` : ''}.
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void navigator.clipboard.writeText(driverDispatchMsg);
+                                            setDriverDispatchCopied(true);
+                                            setTimeout(() => setDriverDispatchCopied(false), 3000);
+                                          }}
+                                          className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-100 transition"
+                                        >
+                                          {driverDispatchCopied ? <Check className="h-3.5 w-3.5 text-blue-600" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                          {driverDispatchCopied ? 'Copied!' : 'Copy Driver Message'}
+                                        </button>
+                                        {driverWaUrl ? (
+                                          <a
+                                            href={driverWaUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-blue-800 transition shadow-sm"
+                                          >
+                                            <ExternalLink className="h-3.5 w-3.5" /> Open Driver WhatsApp
+                                          </a>
+                                        ) : (
+                                          <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900">
+                                            No driver phone saved
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <textarea
+                                      readOnly
+                                      rows={9}
+                                      value={driverDispatchMsg}
+                                      className="w-full rounded-xl border border-blue-200 bg-white p-3 font-mono text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
                                 </div>
                               );
                             })()}

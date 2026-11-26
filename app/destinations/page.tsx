@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
+import ScrollReveal from "../components/ScrollReveal";
 import { destinationsData, Destination } from "./destinationsData";
 
 const whatsappNumber = "94711114901";
@@ -117,23 +118,23 @@ export default function DestinationsPage() {
       {/* HERO SECTION (Bright Cinematic Banner) */}
       <section className="relative flex min-h-[55vh] items-center justify-center overflow-hidden pt-28 pb-16">
         {/* Background Image */}
-        <div className="absolute inset-0 bg-[url('/images/elephants_are_walking.jpg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('/images/elephants_are_walking.jpg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center animate-hero-bg" />
 
         {/* Light Overlay Gradients */}
         <div className="absolute inset-0 bg-slate-900/50" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/30 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-5xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             Sri Lanka Destination Guide
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl drop-shadow-md">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl drop-shadow-md animate-hero-title">
             Explore Paradise <br />
             <span className="text-blue-200">Destinations</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-slate-100 drop-shadow">
+          <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-slate-100 drop-shadow animate-hero-subtitle">
             From ancient royal rock fortresses and misty tea highlands to wild elephant safaris and sun-kissed beaches.
           </p>
         </div>
@@ -141,7 +142,7 @@ export default function DestinationsPage() {
 
       {/* DESTINATIONS CARDS GRID (Clean Light Theme) */}
       <section className="px-6 py-16 lg:px-8 max-w-7xl mx-auto">
-        <div className="text-center max-w-2xl mx-auto mb-8">
+        <ScrollReveal variant="fade-up" className="text-center max-w-2xl mx-auto mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
             Handpicked Locations
           </p>
@@ -151,7 +152,7 @@ export default function DestinationsPage() {
           <p className="mt-3 text-slate-600 text-sm">
             Select a destination to view highlights, best visiting seasons, and tour connections.
           </p>
-        </div>
+        </ScrollReveal>
 
         {/* REGION FILTER PILLS */}
         <div
@@ -181,11 +182,11 @@ export default function DestinationsPage() {
         </div>
 
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {filteredDestinations.map((dest) => (
-            <article
-              key={dest.id}
-              className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:border-blue-300"
-            >
+          {filteredDestinations.map((dest, idx) => (
+            <ScrollReveal key={dest.id} variant="fade-up" delay={(idx % 3) * 80} className="h-full">
+              <article
+                className="group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lg shadow-slate-200/50 transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:border-blue-300"
+              >
               <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
                 <Image
                   src={dest.image}
@@ -245,7 +246,8 @@ export default function DestinationsPage() {
                   </a>
                 </div>
               </div>
-            </article>
+              </article>
+            </ScrollReveal>
           ))}
         </div>
       </section>

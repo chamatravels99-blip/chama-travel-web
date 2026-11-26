@@ -405,25 +405,104 @@ footer a:hover {
   }
 }
 /* =========================
-   CUSTOM ANIMATIONS
+   CUSTOM ANIMATIONS & PAGE-LOAD ENTRANCES
 ========================= */
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(25px);
+    transform: translate3d(0, 22px, 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translate3d(-26px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translate3d(26px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes heroAmbientZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.07);
   }
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* 延迟 (Delay) සඳහා අතිරේක classes අවශ්‍ය නම් */
+.animate-fade-in-scale {
+  animation: fadeInScale 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Above-the-fold Hero staggered page-load sequence */
+.animate-hero-bg {
+  animation: heroAmbientZoom 18s ease-out forwards;
+  will-change: transform;
+}
+
+.animate-hero-badge {
+  animation: fadeInUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0ms both;
+}
+
+.animate-hero-title {
+  animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+.animate-hero-subtitle {
+  animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) 240ms both;
+}
+
+.animate-hero-tags {
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 320ms both;
+}
+
+.animate-hero-actions {
+  animation: fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) 400ms both;
+}
+
 .animation-delay-150 {
   animation-delay: 150ms;
 }
@@ -431,6 +510,74 @@ footer a:hover {
 .animation-delay-300 {
   animation-delay: 300ms;
 }
+
+/* ScrollReveal GPU-accelerated states */
+.scroll-reveal {
+  will-change: opacity, transform;
+  transition-property: opacity, transform;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scroll-reveal[data-revealed="true"] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  will-change: auto;
+}
+
+.scroll-reveal[data-revealed="false"][data-variant="fade-up"] {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0);
+}
+
+.scroll-reveal[data-revealed="false"][data-variant="fade-in"] {
+  opacity: 0;
+  transform: none;
+}
+
+.scroll-reveal[data-revealed="false"][data-variant="zoom-in"] {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.scroll-reveal[data-revealed="false"][data-variant="slide-left"] {
+  opacity: 0;
+  transform: translate3d(-28px, 0, 0);
+}
+
+.scroll-reveal[data-revealed="false"][data-variant="slide-right"] {
+  opacity: 0;
+  transform: translate3d(28px, 0, 0);
+}
+
+/* Respect user OS reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-fade-in-up,
+  .animate-fade-in-scale,
+  .animate-slide-in-left,
+  .animate-slide-in-right,
+  .animate-hero-bg,
+  .animate-hero-badge,
+  .animate-hero-title,
+  .animate-hero-subtitle,
+  .animate-hero-tags,
+  .animate-hero-actions {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .scroll-reveal,
+  .scroll-reveal[data-revealed="false"] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 /* Hide Netlify Badge on Free Plans */
 #netlify-badge,
 iframe[src*="netlify"],

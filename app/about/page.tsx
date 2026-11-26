@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
+import ScrollReveal from "../components/ScrollReveal";
 
 const whatsappNumber = "94711114901";
 
@@ -97,21 +98,21 @@ export default function AboutPage() {
 
       {/* HERO BANNER */}
       <section className="relative flex min-h-[50vh] items-center justify-center overflow-hidden pt-28 pb-16">
-        <div className="absolute inset-0 bg-[url('/images/places_to_visit.jpg')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('/images/places_to_visit.jpg')] bg-cover bg-center animate-hero-bg" />
         <div className="absolute inset-0 bg-slate-900/70" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             SLTDA Certified Private Chauffeur
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-hero-title">
             About <br />
             <span className="text-blue-200">Chama Travel & Tours</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 animate-hero-subtitle">
             Your trusted friend and expert private driver-guide for a safe, comfortable, and unforgettable holiday across Sri Lanka.
           </p>
         </div>
@@ -121,7 +122,7 @@ export default function AboutPage() {
       <section className="px-6 py-20 lg:px-8 max-w-7xl mx-auto">
         <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
           
-          <div className="lg:col-span-6 space-y-6">
+          <ScrollReveal variant="slide-left" className="lg:col-span-6 space-y-6">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
               Welcome to Our Story
             </p>
@@ -136,30 +137,30 @@ export default function AboutPage() {
             </p>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
                 <p className="text-3xl font-black text-blue-600">5.0 ★</p>
                 <p className="text-xs font-bold text-slate-700 mt-1">TripAdvisor Rated</p>
                 <p className="text-[11px] text-slate-500">100% Recommended by travelers</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-md">
                 <p className="text-3xl font-black text-emerald-600">SLTDA</p>
                 <p className="text-xs font-bold text-slate-700 mt-1">Certified Guide</p>
                 <p className="text-[11px] text-slate-500">Official Tourist Driver ID</p>
               </div>
             </div>
-          </div>
+          </ScrollReveal>
 
-          <div className="lg:col-span-6">
+          <ScrollReveal variant="slide-right" delay={120} className="lg:col-span-6">
             <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-slate-200 shadow-2xl bg-slate-100">
               <Image
                 src="/images/WhatsApp Image 2024-12-29 at 13.03.27_9da2629c.jpg"
                 alt="Sri Lanka scenic tour travel"
                 fill
-                className="object-cover"
+                className="object-cover transition duration-700 hover:scale-105"
               />
             </div>
-          </div>
+          </ScrollReveal>
 
         </div>
       </section>
@@ -167,7 +168,7 @@ export default function AboutPage() {
       {/* MASONRY PHOTO GALLERY (NO LABELS) */}
       <section className="bg-slate-100 px-6 py-20 lg:px-8 border-t border-b border-slate-200">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-12">
+          <ScrollReveal variant="fade-up" className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
               Captures from Our Trips
             </p>
@@ -177,7 +178,7 @@ export default function AboutPage() {
             <p className="mt-2 text-slate-500 text-xs sm:text-sm">
               Click any photo to expand and slide through our travel moments.
             </p>
-          </div>
+          </ScrollReveal>
 
           {/* Masonry Layout: columns-1 sm:columns-2 lg:columns-3 */}
           <div className="columns-1 gap-1 sm:columns-2 lg:columns-3 space-y-1">
@@ -275,7 +276,7 @@ export default function AboutPage() {
       {/* REVIEWS & TESTIMONIALS SECTION */}
       <section className="bg-slate-900 px-6 py-20 text-white lg:px-8">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-14">
+          <ScrollReveal variant="fade-up" className="text-center max-w-2xl mx-auto mb-14">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-400">
               Verified Feedback
             </p>
@@ -285,36 +286,35 @@ export default function AboutPage() {
             <p className="mt-3 text-zinc-400 text-sm">
               Read authentic reviews left by foreign travelers on our official TripAdvisor page.
             </p>
-          </div>
+          </ScrollReveal>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {customerReviews.map((rev, index) => (
-              <div
-                key={index}
-                className="flex flex-col justify-between rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-xl backdrop-blur-md"
-              >
-                <div>
-                  <div className="text-amber-400 text-sm mb-3">★★★★★</div>
-                  <h3 className="font-bold text-base text-white">&ldquo;{rev.title}&rdquo;</h3>
-                  <p className="mt-3 text-xs text-zinc-300 leading-relaxed italic">
-                    &ldquo;{rev.text}&rdquo;
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+              <ScrollReveal key={index} variant="fade-up" delay={index * 80} className="h-full">
+                <div className="flex h-full flex-col justify-between rounded-3xl border border-white/10 bg-slate-950/80 p-6 shadow-xl backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-blue-400/30">
                   <div>
-                    <p className="text-xs font-bold text-white">{rev.author}</p>
-                    <p className="text-[10px] text-zinc-400">{rev.location}</p>
+                    <div className="text-amber-400 text-sm mb-3">★★★★★</div>
+                    <h3 className="font-bold text-base text-white">&ldquo;{rev.title}&rdquo;</h3>
+                    <p className="mt-3 text-xs text-zinc-300 leading-relaxed italic">
+                      &ldquo;{rev.text}&rdquo;
+                    </p>
                   </div>
-                  <a
-                    href={rev.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] font-semibold text-blue-400 hover:underline"
-                  >
-                    TripAdvisor
-                  </a>
+                  <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-white">{rev.author}</p>
+                      <p className="text-[10px] text-zinc-400">{rev.location}</p>
+                    </div>
+                    <a
+                      href={rev.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold text-blue-400 hover:underline"
+                    >
+                      TripAdvisor
+                    </a>
+                  </div>
                 </div>
-              </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -323,45 +323,51 @@ export default function AboutPage() {
       {/* WHY CHOOSE US */}
       <section className="bg-slate-950 px-6 py-20 text-white lg:px-8 border-t border-white/10">
         <div className="mx-auto max-w-7xl">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <ScrollReveal variant="fade-up" className="text-center max-w-2xl mx-auto mb-16">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-400">
               Our Core Values
             </p>
             <h2 className="mt-2 text-3xl font-extrabold sm:text-4xl">
               Why Travelers Choose Chama Travels
             </h2>
-          </div>
+          </ScrollReveal>
 
           <div className="grid gap-8 md:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-bold mb-6">
-                🛡️
+            <ScrollReveal variant="fade-up" delay={0} className="h-full">
+              <div className="h-full rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-blue-400/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-bold mb-6">
+                  🛡️
+                </div>
+                <h3 className="text-xl font-bold text-white">Safety & Reliability</h3>
+                <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
+                  Fully insured, air-conditioned modern vehicles maintained to the highest standards with an experienced, cautious driver.
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white">Safety & Reliability</h3>
-              <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
-                Fully insured, air-conditioned modern vehicles maintained to the highest standards with an experienced, cautious driver.
-              </p>
-            </div>
+            </ScrollReveal>
 
-            <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white text-xl font-bold mb-6">
-                🤝
+            <ScrollReveal variant="fade-up" delay={100} className="h-full">
+              <div className="h-full rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-emerald-400/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white text-xl font-bold mb-6">
+                  🤝
+                </div>
+                <h3 className="text-xl font-bold text-white">Friendly Personal Service</h3>
+                <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
+                  Travel like with a trusted friend. We go the extra mile to ensure your family or couple trip is comfortable and memorable.
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white">Friendly Personal Service</h3>
-              <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
-                Travel like with a trusted friend. We go the extra mile to ensure your family or couple trip is comfortable and memorable.
-              </p>
-            </div>
+            </ScrollReveal>
 
-            <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600 text-white text-xl font-bold mb-6">
-                🗺️
+            <ScrollReveal variant="fade-up" delay={200} className="h-full">
+              <div className="h-full rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-xl backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-purple-400/30">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600 text-white text-xl font-bold mb-6">
+                  🗺️
+                </div>
+                <h3 className="text-xl font-bold text-white">Flexible Custom Itineraries</h3>
+                <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
+                  No rigid schedules. We tailor every day according to your pace, preferences, and hidden gem discoveries across the island.
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white">Flexible Custom Itineraries</h3>
-              <p className="mt-3 text-sm text-zinc-300 leading-relaxed">
-                No rigid schedules. We tailor every day according to your pace, preferences, and hidden gem discoveries across the island.
-              </p>
-            </div>
+            </ScrollReveal>
           </div>
 
           <div className="mt-12 text-center">

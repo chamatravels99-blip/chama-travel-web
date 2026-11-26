@@ -701,7 +701,7 @@ export async function POST(request: Request) {
         p_quote_id: quoteId,
       });
       if (error) {
-        console.error('WhatsApp quote confirmation failed.', error.code);
+        console.error('WhatsApp quote confirmation failed.', error.code, error.message);
         return NextResponse.json(
           { success: false, error: 'The quote could not be confirmed. It may have expired or already been processed.' },
           { status: 409 }
@@ -758,6 +758,15 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+      const issuedRow = Array.isArray(data) ? data[0] : data;
+      const issuedQuoteId = issuedRow && typeof issuedRow === 'object' && 'quote_id' in issuedRow ? String(issuedRow.quote_id) : null;
+      const customerMessage = typeof input.customer_message === 'string' ? input.customer_message.trim().slice(0, 1000) : '';
+      if (issuedQuoteId && customerMessage) {
+        await supabase.rpc('admin_set_quote_customer_message', {
+          p_quote_id: issuedQuoteId,
+          p_customer_message: customerMessage,
+        });
+      }
       return quoteResponse(data, String(currency), request.url);
     }
 
@@ -787,6 +796,15 @@ export async function POST(request: Request) {
             : 'The quote could not be issued. Verify the booking, amount and expiry.' },
           { status: 400 }
         );
+      }
+      const issuedRow = Array.isArray(data) ? data[0] : data;
+      const issuedQuoteId = issuedRow && typeof issuedRow === 'object' && 'quote_id' in issuedRow ? String(issuedRow.quote_id) : null;
+      const customerMessage = typeof input.customer_message === 'string' ? input.customer_message.trim().slice(0, 1000) : '';
+      if (issuedQuoteId && customerMessage) {
+        await supabase.rpc('admin_set_quote_customer_message', {
+          p_quote_id: issuedQuoteId,
+          p_customer_message: customerMessage,
+        });
       }
       return quoteResponse(data, String(currency), request.url);
     }

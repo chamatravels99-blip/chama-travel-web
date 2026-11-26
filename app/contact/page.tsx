@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
+import ScrollReveal from "../components/ScrollReveal";
 import { buildWhatsAppUrl } from "@/lib/site-settings";
 import { usePublicSiteSettings } from "@/lib/use-public-site-settings";
 
@@ -40,21 +41,21 @@ export default function ContactPage() {
 
       {/* HERO BANNER */}
       <section className="relative flex min-h-[45vh] items-center justify-center overflow-hidden pt-28 pb-16">
-        <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/34128249/pexels-photo-34128249.jpeg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/34128249/pexels-photo-34128249.jpeg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center animate-hero-bg" />
         <div className="absolute inset-0 bg-slate-900/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             24/7 Fast Customer Support
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-hero-title">
             Get in Touch <br />
             <span className="text-blue-200">With Chama Travels</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 animate-hero-subtitle">
             Have questions about tour packages, airport transfers, or custom itineraries? We are here to help you 24/7!
           </p>
         </div>
@@ -65,7 +66,7 @@ export default function ContactPage() {
         <div className="grid gap-12 lg:grid-cols-12">
           
           {/* Left Column: Direct Contact Info, Official Address, Email & Official SVG Social Icons */}
-          <div className="lg:col-span-5 flex flex-col justify-between space-y-8">
+          <ScrollReveal variant="slide-left" className="lg:col-span-5 flex flex-col justify-between space-y-8">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
                 Direct Contact
@@ -214,10 +215,10 @@ export default function ContactPage() {
                 Verified on TripAdvisor with 100% positive guest reviews for safe driving, punctuality, and friendly service across Sri Lanka.
               </p>
             </div>
-          </div>
+          </ScrollReveal>
 
           {/* Right Column: Interactive Booking Inquiry Form */}
-          <div className="lg:col-span-7">
+          <ScrollReveal variant="slide-right" delay={120} className="lg:col-span-7">
             <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-10 shadow-xl shadow-slate-200/50">
               <h3 className="text-2xl font-bold text-slate-900">Send an Inquiry</h3>
               <p className="mt-1 text-xs text-slate-500">
@@ -331,14 +332,14 @@ export default function ContactPage() {
                 )}
               </form>
             </div>
-          </div>
+          </ScrollReveal>
 
         </div>
       </section>
 
       {/* GOOGLE MAPS EMBED SECTION */}
       <section className="px-6 py-10 lg:px-8 max-w-7xl mx-auto">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 shadow-lg">
+        <ScrollReveal variant="fade-up" className="overflow-hidden rounded-3xl border border-slate-200 shadow-lg">
           <iframe
             src={googleMapsEmbedUrl}
             width="100%"
@@ -349,7 +350,7 @@ export default function ContactPage() {
             referrerPolicy="no-referrer-when-downgrade"
             title="Chama Travel & Tours Location"
           />
-        </div>
+        </ScrollReveal>
       </section>
 
       {/* Footer */}

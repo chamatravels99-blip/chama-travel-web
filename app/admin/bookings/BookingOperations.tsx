@@ -161,18 +161,11 @@ export default function BookingOperations({
         currency: quoteCurrency,
         expires_at: expiresAt,
         ...(mode === 'manual_quote' ? { amount: Number(amount.trim()).toFixed(2) } : {}),
+        ...(quoteNote.trim() ? { customer_message: quoteNote.trim() } : {}),
       });
 
       if (quoteNote.trim()) {
-        try {
-          await postOp({
-            action: 'add_internal_note',
-            note: `Quotation Note (${quoteCurrency} ${mode === 'manual_quote' ? Number(amount.trim()).toFixed(2) : suggestion ?? ''}): ${quoteNote.trim()}`,
-          });
-          setQuoteNote('');
-        } catch {
-          // Non-fatal if note saving fails after quote issuance
-        }
+        setQuoteNote('');
       }
 
       setMessage('Quotation issued successfully! Share the guest acceptance link below with the customer.');

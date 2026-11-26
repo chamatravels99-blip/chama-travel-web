@@ -3,6 +3,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import Destinations from "./components/Destinations";
 import Footer from "./components/Footer";
+import ScrollReveal from "./components/ScrollReveal";
 import TourModal from "./tours/components/TourModal";
 import ToursNavbar from "./tours/components/ToursNavbar";
 import { mapRowToTour, PublicTourPackageRow, toursData } from "./tours/toursData";
@@ -249,22 +250,22 @@ export default function Home() {
       {/* LIGHT DESIGN HERO BANNER */}
       <section id="home" className="relative flex min-h-[60vh] sm:min-h-[70vh] items-center justify-center overflow-hidden pt-28 pb-16">
         <div
-          className="absolute inset-0 bg-cover bg-center"
+          className="absolute inset-0 bg-cover bg-center animate-hero-bg"
           style={{ backgroundImage: `url("${siteSettings.hero_image_url.replace(/"/g, '\\"')}")` }}
         />
         <div className="absolute inset-0 bg-slate-900/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             {siteSettings.hero_badge}
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-fade-in-up">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-hero-title">
             {siteSettings.hero_title.includes(" With ") ? (
               <>
                 {siteSettings.hero_title.split(" With ")[0]} <br />
-                <span className="text-blue-200 animate-fade-in-up animation-delay-600">
+                <span className="text-blue-200">
                   With {siteSettings.hero_title.split(" With ").slice(1).join(" With ")}
                 </span>
               </>
@@ -273,15 +274,15 @@ export default function Home() {
             )}
           </h1>
 
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 200 animate-fade-in-up animation-delay-500">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 animate-hero-subtitle">
             {siteSettings.hero_subtitle}
           </p>
 
-          <p className="mt-3 text-xs font-semibold text-blue-200 uppercase tracking-wider animate-fade-in-up animation-delay-300">
+          <p className="mt-3 text-xs font-semibold text-blue-200 uppercase tracking-wider animate-hero-tags">
             Private Tours • Airport Transfers • Vehicle Rental
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 animate-fade-in-up animation-delay-200">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 animate-hero-actions">
             <a
               href="/tours"
               className="rounded-full bg-blue-600 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 hover:scale-105"
@@ -306,7 +307,7 @@ export default function Home() {
 
       {/* ================= INTRO ================= */}
       <section className="px-6 py-20 lg:px-8">
-        <div className="mx-auto max-w-5xl text-center">
+        <ScrollReveal variant="fade-up" className="mx-auto max-w-5xl text-center">
           <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">
             Welcome to Chama Travels
           </p>
@@ -320,7 +321,7 @@ export default function Home() {
             exciting wildlife adventures, we help you experience Sri Lanka in
             your own way.
           </p>
-        </div>
+        </ScrollReveal>
       </section>
 
       {/* ================= SERVICES ================= */}
@@ -329,7 +330,7 @@ export default function Home() {
         className="bg-slate-50 bg-[radial-gradient(ellipse_at_top,rgba(219,234,254,0.5),transparent_65%)] px-6 py-20 lg:px-8"
       >
         <div className="mx-auto max-w-7xl">
-          <div className="max-w-2xl">
+          <ScrollReveal variant="fade-up" className="max-w-2xl">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">
               Our Services
             </p>
@@ -342,7 +343,7 @@ export default function Home() {
               From airport pickup to complete Sri Lanka tours, we make your
               journey comfortable and stress-free.
             </p>
-          </div>
+          </ScrollReveal>
 
           <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {[
@@ -362,21 +363,20 @@ export default function Home() {
                 title: "Local Experiences",
                 text: "Discover culture, food, nature and hidden places with local guidance.",
               },
-            ].map((service) => (
-              <div
-                key={service.title}
-                className="h-full min-h-56 rounded-3xl border border-white/90 bg-white/80 p-7 shadow-[0_14px_36px_rgba(15,23,42,0.07)] backdrop-blur-md transition duration-300 ease-out motion-reduce:transition-none md:hover:-translate-y-1 md:hover:border-blue-200 md:hover:bg-white md:hover:shadow-[0_20px_45px_rgba(37,99,235,0.14)]"
-              >
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-400/30 bg-blue-600 text-lg font-bold text-white shadow-md shadow-blue-900/20 ring-1 ring-white/70">
-                  ✓
+            ].map((service, index) => (
+              <ScrollReveal key={service.title} variant="fade-up" delay={index * 80} className="h-full">
+                <div className="h-full min-h-56 rounded-3xl border border-white/90 bg-white/80 p-7 shadow-[0_14px_36px_rgba(15,23,42,0.07)] backdrop-blur-md transition duration-300 ease-out motion-reduce:transition-none md:hover:-translate-y-1.5 md:hover:border-blue-200 md:hover:bg-white md:hover:shadow-[0_20px_45px_rgba(37,99,235,0.14)]">
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-400/30 bg-blue-600 text-lg font-bold text-white shadow-md shadow-blue-900/20 ring-1 ring-white/70">
+                    ✓
+                  </div>
+
+                  <h3 className="text-xl font-bold">{service.title}</h3>
+
+                  <p className="mt-3 leading-7 text-zinc-600">
+                    {service.text}
+                  </p>
                 </div>
-
-                <h3 className="text-xl font-bold">{service.title}</h3>
-
-                <p className="mt-3 leading-7 text-zinc-600">
-                  {service.text}
-                </p>
-              </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -395,7 +395,7 @@ export default function Home() {
         <div aria-hidden="true" className="absolute inset-0 bg-white/70" />
 
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 md:grid-cols-[minmax(0,0.32fr)_minmax(0,0.68fr)] md:items-center lg:gap-12">
-          <div className="min-w-0 md:pr-2">
+          <ScrollReveal variant="slide-left" className="min-w-0 md:pr-2">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700">
               Explore Sri Lanka
             </p>
@@ -418,7 +418,7 @@ export default function Home() {
             >
               View All →
             </a>
-          </div>
+          </ScrollReveal>
 
           <div className="relative min-w-0 @container">
             <div
@@ -496,7 +496,7 @@ export default function Home() {
         className="bg-[radial-gradient(ellipse_at_top,rgba(219,234,254,0.4),transparent_68%)] px-6 py-20 lg:px-8"
       >
         <div className="mx-auto grid max-w-7xl md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_auto]">
-          <div className="md:col-start-1 md:row-start-1">
+          <ScrollReveal variant="fade-up" className="md:col-start-1 md:row-start-1">
             <div className="max-w-2xl">
               <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-600">
                 Featured Tours
@@ -506,7 +506,7 @@ export default function Home() {
                 Explore Our Sri Lanka Tours
               </h2>
             </div>
-          </div>
+          </ScrollReveal>
 
           <div className="relative mt-12 @container md:col-span-2 md:row-start-2">
             <div
@@ -648,7 +648,7 @@ export default function Home() {
         <div aria-hidden="true" className="absolute inset-0 bg-white/70" />
 
         <div className="relative z-10 mx-auto max-w-6xl">
-          <div className="mx-auto max-w-3xl text-center">
+          <ScrollReveal variant="fade-up" className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700">
               ABOUT CHAMA TRAVELS
             </p>
@@ -662,7 +662,7 @@ export default function Home() {
               customized travel experiences throughout Sri Lanka. Our goal is
               to make every journey comfortable, flexible and memorable.
             </p>
-          </div>
+          </ScrollReveal>
 
           <ul className="mt-10 grid grid-cols-1 md:mt-14 md:grid-cols-2">
             {[
@@ -690,11 +690,12 @@ export default function Home() {
                   "Enjoy private transportation with comfortable, well-maintained vehicles and professional drivers for a relaxed journey.",
                 icon: "car",
               },
-            ].map((benefit) => (
+            ].map((benefit, index) => (
               <li
                 key={benefit.title}
                 className="border-b border-blue-100/80 py-7 last:border-b-0 first:pt-0 last:pb-0 md:border-b-0 md:py-9 md:first:pt-9 md:last:pb-9 md:[&:nth-child(odd)]:border-r md:[&:nth-child(odd)]:border-blue-100/80 md:[&:nth-child(-n+2)]:border-b md:[&:nth-child(-n+2)]:border-blue-100/80 md:[&:nth-child(odd)]:pr-8 md:[&:nth-child(even)]:pl-8"
               >
+                <ScrollReveal variant="fade-up" delay={index * 80}>
                 <div className="group flex gap-5 rounded-xl transition-colors md:px-4 md:py-2">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 transition-transform duration-300 motion-reduce:transition-none md:group-hover:scale-105">
                     <svg
@@ -746,6 +747,7 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+                </ScrollReveal>
               </li>
             ))}
           </ul>
@@ -759,7 +761,7 @@ export default function Home() {
         className="bg-slate-50 px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
       >
         <div className="mx-auto max-w-7xl">
-          <div className="mx-auto max-w-3xl text-center">
+          <ScrollReveal variant="fade-up" className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700">
               Traveler stories
             </p>
@@ -773,9 +775,9 @@ export default function Home() {
               Real experiences from travelers who explored Sri Lanka with Chama
               Travels.
             </p>
-          </div>
+          </ScrollReveal>
 
-          <div className="mt-8 flex flex-col gap-5 border-y border-zinc-200 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <ScrollReveal variant="fade-in" delay={100} className="mt-8 flex flex-col gap-5 border-y border-zinc-200 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <p className="text-3xl font-extrabold text-zinc-900">5.0</p>
               <div>
@@ -809,7 +811,7 @@ export default function Home() {
                 See Reviews on Google →
               </a>
             </div>
-          </div>
+          </ScrollReveal>
 
           <div className="relative mt-6">
             <div
@@ -824,7 +826,7 @@ export default function Home() {
                   scrollReviews(event.key === "ArrowLeft" ? -1 : 1);
                 }
               }}
-              className="flex snap-x snap-mandatory items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4"
+              className="flex snap-x snap-mandatory items-stretch gap-5 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-4 py-2"
             >
               {customerReviews.map((review) => (
                 <article
@@ -832,7 +834,7 @@ export default function Home() {
                   role="group"
                   aria-roledescription="slide"
                   aria-label={`Review by ${review.author}`}
-                  className="flex min-h-[310px] min-w-0 flex-[0_0_100%] snap-start flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] sm:p-6 md:basis-[calc((100%-1.25rem)/2)] xl:basis-[calc((100%-3.75rem)/4)]"
+                  className="flex min-h-[310px] min-w-0 flex-[0_0_100%] snap-start flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition duration-300 ease-out motion-reduce:transition-none sm:p-6 md:basis-[calc((100%-1.25rem)/2)] md:hover:-translate-y-1 md:hover:border-blue-200 md:hover:shadow-[0_18px_36px_rgba(37,99,235,0.10)] xl:basis-[calc((100%-3.75rem)/4)]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -912,7 +914,7 @@ export default function Home() {
         className="bg-slate-50 bg-[radial-gradient(ellipse_at_top,rgba(219,234,254,0.4),transparent_68%)] px-4 py-16 sm:px-6 sm:py-20 lg:px-8"
       >
         <div className="mx-auto max-w-7xl">
-          <div className="mx-auto max-w-3xl text-center">
+          <ScrollReveal variant="fade-up" className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-700">
               EXPERIENCE SRI LANKA
             </p>
@@ -927,37 +929,41 @@ export default function Home() {
               unforgettable experiences from travelling around Sri Lanka with
               Chama Travels.
             </p>
-          </div>
+          </ScrollReveal>
 
           <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 md:mt-10 md:auto-rows-[150px] md:grid-cols-4">
             {homeGalleryPhotos.map((photo, index) => (
-              <figure
+              <ScrollReveal
                 key={photo.id || photo.image_url}
-                className={`group relative aspect-[4/3] min-w-0 overflow-hidden rounded-2xl bg-slate-100 shadow-[0_10px_28px_rgba(15,23,42,0.07)] md:aspect-auto ${galleryLayoutClass(photo.layout_size)}`}
+                variant="zoom-in"
+                delay={(index % 4) * 80}
+                className={galleryLayoutClass(photo.layout_size)}
               >
-                <button
-                  type="button"
-                  aria-label={`Open larger image: ${photo.alt_text}`}
-                  onClick={() => setActiveGalleryIndex(index)}
-                  className="absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-                >
-                  <Image
-                    src={photo.image_url}
-                    alt={photo.alt_text}
-                    width={1000}
-                    height={750}
-                    unoptimized={!isOptimizableImageUrl(photo.image_url)}
-                    loading="lazy"
-                    sizes={
-                      photo.layout_size === "featured" ||
-                      photo.layout_size === "wide"
-                        ? "(max-width: 767px) 50vw, 50vw"
-                        : "(max-width: 767px) 50vw, 25vw"
-                    }
-                    className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.03]"
-                  />
-                </button>
-              </figure>
+                <figure className="group relative aspect-[4/3] h-full w-full min-w-0 overflow-hidden rounded-2xl bg-slate-100 shadow-[0_10px_28px_rgba(15,23,42,0.07)] transition duration-300 md:aspect-auto md:hover:-translate-y-1 md:hover:shadow-[0_18px_36px_rgba(15,23,42,0.14)]">
+                  <button
+                    type="button"
+                    aria-label={`Open larger image: ${photo.alt_text}`}
+                    onClick={() => setActiveGalleryIndex(index)}
+                    className="absolute inset-0 block h-full w-full cursor-zoom-in overflow-hidden bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                  >
+                    <Image
+                      src={photo.image_url}
+                      alt={photo.alt_text}
+                      width={1000}
+                      height={750}
+                      unoptimized={!isOptimizableImageUrl(photo.image_url)}
+                      loading="lazy"
+                      sizes={
+                        photo.layout_size === "featured" ||
+                        photo.layout_size === "wide"
+                          ? "(max-width: 767px) 50vw, 50vw"
+                          : "(max-width: 767px) 50vw, 25vw"
+                      }
+                      className="h-full w-full object-cover transition duration-500 ease-out motion-reduce:transition-none md:group-hover:scale-[1.05]"
+                    />
+                  </button>
+                </figure>
+              </ScrollReveal>
             ))}
           </div>
 
@@ -1056,7 +1062,10 @@ export default function Home() {
           className="absolute inset-0 bg-slate-950/55"
         />
 
-        <div className="relative z-10 mx-auto max-w-4xl rounded-3xl border border-white/20 bg-white/10 p-5 text-center text-white shadow-xl shadow-black/15 backdrop-blur-md sm:p-9 lg:p-12">
+        <ScrollReveal
+          variant="zoom-in"
+          className="relative z-10 mx-auto max-w-4xl rounded-3xl border border-white/20 bg-white/10 p-5 text-center text-white shadow-xl shadow-black/15 backdrop-blur-md sm:p-9 lg:p-12"
+        >
           <p className="text-sm font-bold uppercase tracking-[0.25em] text-blue-200">
             Start Your Journey
           </p>
@@ -1092,7 +1101,7 @@ export default function Home() {
             </svg>
             <span>Plan My Trip on WhatsApp</span>
           </a>
-        </div>
+        </ScrollReveal>
       </section>
 {/* Floating WhatsApp Quick Action Button */}
       <a

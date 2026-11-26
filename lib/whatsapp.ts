@@ -65,3 +65,51 @@ Here are your confirmed trip and driver details for booking *${details.bookingRe
 
 Thank you for choosing Chama Travels! If you have any questions or schedule adjustments, please contact us or reply to this message.`;
 }
+
+export type DriverTripDispatchDetails = {
+  bookingRef: string;
+  driverName: string;
+  customerName: string;
+  customerPhone: string;
+  pickupTimeColombo: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  routeSummary?: string | null;
+  passengerCount: number;
+  luggageCount: number;
+  vehicleName: string;
+  vehicleRegistration: string | null;
+  customerNotes?: string | null;
+};
+
+export function formatDriverTripDispatchMessage(details: DriverTripDispatchDetails): string {
+  const vehicleReg = details.vehicleRegistration ? ` (Reg: ${details.vehicleRegistration})` : '';
+  const cleanedNotes = details.customerNotes?.trim() || '';
+
+  const lines = [
+    '*CHAMA TRAVELS — DRIVER TRIP DISPATCH*',
+    '',
+    `Hello ${details.driverName},`,
+    '',
+    `You have been assigned to booking *${details.bookingRef}*. Please review the trip details below:`,
+    '',
+    `👤 *Customer:* ${details.customerName}`,
+    `📞 *Customer Contact:* ${details.customerPhone || 'Contact office'}`,
+    `📅 *Pickup Date & Time:* ${details.pickupTimeColombo}`,
+    `📍 *Pickup Location:* ${details.pickupLocation}`,
+    `🏁 *Drop-off / Route:* ${details.routeSummary?.trim() || details.dropoffLocation}`,
+    `👥 *Passengers & Luggage:* ${details.passengerCount} pax · ${details.luggageCount} bags`,
+    `🚘 *Assigned Vehicle:* ${details.vehicleName}${vehicleReg}`,
+  ];
+
+  if (cleanedNotes) {
+    lines.push('', `📝 *Special Instructions / Trip Notes:*`, cleanedNotes);
+  }
+
+  lines.push(
+    '',
+    'Please arrive at the pickup point 15 minutes early and confirm receipt of this dispatch with the Chama Travels office.'
+  );
+
+  return lines.join('\n');
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Footer from "../components/Footer";
+import ScrollReveal from "../components/ScrollReveal";
 import CustomTourCTA from "./components/CustomTourCTA";
 import TourCard from "./components/TourCard";
 import TourFilters from "./components/TourFilters";
@@ -137,21 +138,21 @@ export default function ToursPage() {
 
       {/* LIGHT DESIGN HERO BANNER */}
       <section className="relative flex min-h-[50vh] items-center justify-center overflow-hidden pt-28 pb-16">
-        <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/34128249/pexels-photo-34128249.jpeg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center" />
+        <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/34128249/pexels-photo-34128249.jpeg?auto=compress&cs=tinysrgb&w=2000')] bg-cover bg-center animate-hero-bg" />
         <div className="absolute inset-0 bg-slate-900/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
-          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
+          <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md animate-hero-badge">
             Customizable Tour Packages
           </span>
 
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl">
+          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-hero-title">
             Sri Lanka Tour <br />
             <span className="text-blue-200">Itineraries</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 animate-hero-subtitle">
             Carefully designed private chauffeur tour packages covering Sri Lanka’s top highlights. Fully customizable to match your schedule.
           </p>
         </div>
@@ -164,7 +165,7 @@ export default function ToursPage() {
       >
         <div className="mx-auto max-w-7xl">
           {/* Section Header */}
-          <div className="max-w-3xl text-left">
+          <ScrollReveal variant="fade-up" className="max-w-3xl text-left">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600 sm:text-sm">
               Discover Sri Lanka
             </p>
@@ -176,7 +177,7 @@ export default function ToursPage() {
               trips, sun-drenched coastal getaways, or let us custom-craft a
               journey for your travel group.
             </p>
-          </div>
+          </ScrollReveal>
 
           {/* Filter and Search Bar */}
           <div className="mt-10">
@@ -234,12 +235,13 @@ export default function ToursPage() {
           {/* Tour Cards Grid */}
           {filteredTours.length > 0 ? (
             <div className="mt-8 grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
-              {filteredTours.map((tour) => (
-                <TourCard
-                  key={tour.id}
-                  tour={tour}
-                  onOpenModal={handleOpenModal}
-                />
+              {filteredTours.map((tour, index) => (
+                <ScrollReveal key={tour.id} variant="fade-up" delay={(index % 3) * 80} className="h-full">
+                  <TourCard
+                    tour={tour}
+                    onOpenModal={handleOpenModal}
+                  />
+                </ScrollReveal>
               ))}
             </div>
           ) : (
@@ -268,13 +270,13 @@ export default function ToursPage() {
           )}
 
           {/* Custom Tour CTA Banner */}
-          <div className="mt-20">
+          <ScrollReveal variant="zoom-in" className="mt-20">
             <CustomTourCTA />
-          </div>
+          </ScrollReveal>
 
           {/* Sri Lanka Travel Trust & Quality Badges */}
           <section className="mt-20 border-t border-zinc-200/80 pt-16">
-            <div className="mx-auto max-w-4xl text-center">
+            <ScrollReveal variant="fade-up" className="mx-auto max-w-4xl text-center">
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
                 Why Travel with Chama Travels?
               </p>
@@ -285,7 +287,7 @@ export default function ToursPage() {
                 We are a licensed, passionate Sri Lankan local tour operator
                 dedicated to giving you the warmest hospitality and safest journeys.
               </p>
-            </div>
+            </ScrollReveal>
 
             <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {[
@@ -309,35 +311,34 @@ export default function ToursPage() {
                   title: "5-Star TripAdvisor Rated",
                   desc: "Ranked and reviewed by travelers worldwide for warm attentiveness, reliability, and memorable journeys.",
                 },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-3xl border border-zinc-200/70 bg-white/90 p-6 shadow-xs backdrop-blur-sm transition hover:border-blue-200 hover:shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-2xl">
-                    {item.icon}
+              ].map((item, idx) => (
+                <ScrollReveal key={item.title} variant="fade-up" delay={idx * 80} className="h-full">
+                  <div className="h-full rounded-3xl border border-zinc-200/70 bg-white/90 p-6 shadow-xs backdrop-blur-sm transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-md">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-2xl">
+                      {item.icon}
+                    </div>
+                    <h3 className="mt-4 text-base font-bold text-zinc-900">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+                      {item.desc}
+                    </p>
                   </div>
-                  <h3 className="mt-4 text-base font-bold text-zinc-900">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-600">
-                    {item.desc}
-                  </p>
-                </div>
+                </ScrollReveal>
               ))}
             </div>
           </section>
 
           {/* Frequently Asked Questions Accordion */}
           <section className="mt-20 border-t border-zinc-200/80 pt-16">
-            <div className="mx-auto max-w-3xl text-center">
+            <ScrollReveal variant="fade-up" className="mx-auto max-w-3xl text-center">
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-600">
                 Have Questions?
               </p>
               <h2 className="mt-2 text-2xl font-black text-zinc-900 sm:text-3xl">
                 Frequently Asked Questions
               </h2>
-            </div>
+            </ScrollReveal>
 
             <div className="mx-auto mt-10 max-w-3xl space-y-3">
               {faqs.map((faq, idx) => {
