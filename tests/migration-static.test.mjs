@@ -405,10 +405,30 @@ test('marketing & promotions migration enforces RLS, admin policies, seed data, 
     shell,
     /\{\s*label:\s*'Marketing',\s*href:\s*'\/admin\/marketing',\s*icon:\s*Megaphone,\s*roles:\s*ADMIN_ROLES\s*\}/
   );
+});
+
+test('site_settings migration enforces RLS, singleton row, admin policies, and activates AdminShell item #11', () => {
+  const migration = readFileSync(
+    new URL('../supabase/migrations/202611260001_site_settings.sql', import.meta.url),
+    'utf8'
+  );
+  const shell = readFileSync(
+    new URL('../app/admin/components/AdminShell.tsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(migration, /create or replace function private\.is_super_admin\(\)/i);
+  assert.match(migration, /create table if not exists public\.site_settings/i);
+  assert.match(migration, /id text primary key default 'default' check \(id = 'default'\)/i);
+  assert.match(migration, /alter table public\.site_settings enable row level security/i);
+  assert.match(migration, /create policy site_settings_public_read[\s\S]*using \(id = 'default'\)/i);
+  assert.match(migration, /create policy site_settings_admin_insert[\s\S]*private\.is_active_admin\(\)/i);
+  assert.match(migration, /create policy site_settings_admin_update[\s\S]*private\.is_active_admin\(\)/i);
+  assert.match(migration, /on conflict \(id\) do nothing/i);
   assert.match(
     shell,
-    /\{\s*label:\s*'Settings',\s*icon:\s*Settings,\s*roles:\s*ADMIN_ROLES,\s*comingSoon:\s*true\s*\}/
+    /\{\s*label:\s*'Settings',\s*href:\s*'\/admin\/settings',\s*icon:\s*Settings,\s*roles:\s*ADMIN_ROLES\s*\}/
   );
+  assert.doesNotMatch(shell, /comingSoon:\s*true/);
 });
 
 

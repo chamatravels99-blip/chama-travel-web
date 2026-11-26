@@ -3,12 +3,15 @@
 import { useState } from "react";
 import ToursNavbar from "../tours/components/ToursNavbar";
 import Footer from "../components/Footer";
+import { buildWhatsAppUrl } from "@/lib/site-settings";
+import { usePublicSiteSettings } from "@/lib/use-public-site-settings";
 
-const whatsappNumber = "94711114901";
 const googleMapsEmbedUrl =
   "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d126682.1387680074!2d80.004616!3d7.0815764!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2554543128f9092d%3A0x2780ba119100211a!2sChama%20Travel%20%26%20Tours!5e0!3m2!1sen!2slk!4v1700000000000!5m2!1sen!2slk";
 
 export default function ContactPage() {
+  const siteSettings = usePublicSiteSettings();
+  const whatsappNumber = siteSettings.whatsapp_number;
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -78,7 +81,7 @@ export default function ContactPage() {
             <div className="space-y-4">
               {/* WhatsApp Card */}
               <a
-                href={`https://wa.me/${whatsappNumber}`}
+                href={buildWhatsAppUrl(whatsappNumber)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-500 hover:shadow-md group"
@@ -91,14 +94,14 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Instant WhatsApp Chat</p>
-                  <p className="text-base font-bold text-slate-900">+94 71 111 4901</p>
+                  <p className="text-base font-bold text-slate-900">{siteSettings.primary_phone}</p>
                   <p className="text-xs text-emerald-600 font-semibold">Online • 24/7 Fast Response</p>
                 </div>
               </a>
 
               {/* Email Card */}
               <a
-                href="mailto:Info@chamatravels.com"
+                href={`mailto:${siteSettings.contact_email}`}
                 className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-500 hover:shadow-md group"
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md transition group-hover:scale-105">
@@ -110,7 +113,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Official Email</p>
-                  <p className="text-base font-bold text-slate-900">Info@chamatravels.com</p>
+                  <p className="text-base font-bold text-slate-900">{siteSettings.contact_email}</p>
                   <p className="text-xs text-slate-500">Send inquiries anytime</p>
                 </div>
               </a>
@@ -126,11 +129,9 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Registered Office</p>
-                  <p className="text-sm font-bold text-slate-900">Chama Travel & Tours</p>
+                  <p className="text-sm font-bold text-slate-900">{siteSettings.business_name}</p>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                    152/1 Kahambilihena,<br />
-                    Udathuththiripitiya,<br />
-                    Gampaha 11054, Sri Lanka
+                    {siteSettings.office_address}
                   </p>
                 </div>
               </div>
@@ -144,7 +145,7 @@ export default function ContactPage() {
               <div className="flex items-center gap-3">
                 {/* WhatsApp */}
                 <a
-                  href={`https://wa.me/${whatsappNumber}`}
+                  href={buildWhatsAppUrl(whatsappNumber)}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="WhatsApp"
@@ -157,46 +158,52 @@ export default function ContactPage() {
                 </a>
 
                 {/* TripAdvisor */}
-                <a
-                  href="https://www.tripadvisor.com/Attraction_Review-g293962-d32748314-Reviews-Chama_Travel_Tours-Colombo_Western_Province.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="TripAdvisor"
-                  title="TripAdvisor Reviews"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#00AF87] text-white shadow-md transition hover:bg-[#008f6e] hover:scale-105"
-                >
-                  <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-3.5 12.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zm7 0c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM12 7c2.21 0 4 1.79 4 4 0 .34-.05.67-.13.98-1.07-.61-2.31-.98-3.87-.98s-2.8.37-3.87.98c-.08-.31-.13-.64-.13-.98 0-2.21 1.79-4 4-4z"/>
-                  </svg>
-                </a>
+                {siteSettings.tripadvisor_url && (
+                  <a
+                    href={siteSettings.tripadvisor_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="TripAdvisor"
+                    title="TripAdvisor Reviews"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#00AF87] text-white shadow-md transition hover:bg-[#008f6e] hover:scale-105"
+                  >
+                    <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-3.5 12.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zm7 0c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM12 7c2.21 0 4 1.79 4 4 0 .34-.05.67-.13.98-1.07-.61-2.31-.98-3.87-.98s-2.8.37-3.87.98c-.08-.31-.13-.64-.13-.98 0-2.21 1.79-4 4-4z"/>
+                    </svg>
+                  </a>
+                )}
 
                 {/* Facebook */}
-                <a
-                  href="https://www.facebook.com/share/14sG15NeKV3/?mibextid=wwXIfr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Facebook"
-                  title="Facebook Page"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1877F2] text-white shadow-md transition hover:bg-blue-700 hover:scale-105"
-                >
-                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                </a>
+                {siteSettings.facebook_url && (
+                  <a
+                    href={siteSettings.facebook_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Facebook"
+                    title="Facebook Page"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1877F2] text-white shadow-md transition hover:bg-blue-700 hover:scale-105"
+                  >
+                    <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </a>
+                )}
 
                 {/* Instagram */}
-                <a
-                  href="https://www.instagram.com/chamatravels99?stkn=eGY2aW52MTJhY2V5&utm_source=qr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Instagram"
-                  title="Instagram Profile"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white shadow-md transition hover:scale-105"
-                >
-                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                  </svg>
-                </a>
+                {siteSettings.instagram_url && (
+                  <a
+                    href={siteSettings.instagram_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Instagram"
+                    title="Instagram Profile"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] text-white shadow-md transition hover:scale-105"
+                  >
+                    <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </a>
+                )}
               </div>
             </div>
 

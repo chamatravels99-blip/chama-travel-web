@@ -116,3 +116,20 @@ test('money formatting never mixes currencies and hashes are hex', async () => {
   assert.throws(() => formatMoney(5, 'XXX'), /Unsupported billing currency/);
   assert.equal((await sha256Hex(new Uint8Array([1]))).length, 64);
 });
+
+test('invoice PDF renders dynamic bank transfer details and custom footer note from site_settings', async () => {
+  const bytes = await renderInvoicePdf(invoiceSnapshot, {
+    companySettings: {
+      businessName: 'Chama Travel & Tours',
+      officeAddress: 'Colombo, Sri Lanka',
+      primaryPhone: '+94 71 111 4901',
+      contactEmail: 'info@chamatravels.com',
+      registrationNumber: 'SLTDA-9999',
+      bankAccountDetails: 'Bank: Commercial Bank\nAccount: 1000-2000-3000\nSWIFT: CCEYLKLX',
+      invoiceFooterNote: 'Thank you for exploring Sri Lanka with us!',
+    },
+  });
+  const parsed = await PDFDocument.load(bytes);
+  assert.ok(parsed.getPageCount() >= 1);
+  assert.equal(parsed.getAuthor(), 'Chama Travel & Tours');
+});

@@ -6,6 +6,7 @@ import {
   type ReceiptRenderOptions,
 } from '@/lib/pdf/billing-documents';
 import { createServiceClient, DOCUMENT_BUCKET } from '@/lib/server/service-client';
+import { getServerSiteSettings } from '@/lib/server/site-settings';
 
 export interface BillingRenderOptions {
   invoiceNote?: string | null;
@@ -68,10 +69,22 @@ export async function renderAndStoreBillingDocument(
   }
   if (!doc.snapshot) throw new Error('Document snapshot is unavailable.');
 
+  const siteSettings = await getServerSiteSettings(adminClient);
+  const companySettings = {
+    businessName: siteSettings.business_name,
+    officeAddress: siteSettings.office_address,
+    primaryPhone: siteSettings.primary_phone,
+    contactEmail: siteSettings.contact_email,
+    registrationNumber: siteSettings.registration_number,
+    bankAccountDetails: siteSettings.bank_account_details,
+    invoiceFooterNote: siteSettings.invoice_footer_note,
+  };
+
   let bytes: Uint8Array;
   if (doc.document_type === 'invoice') {
     bytes = await renderInvoicePdf(doc.snapshot, {
       invoiceNote: options.invoiceNote ?? null,
+      companySettings,
     });
   } else {
     // Optionally enrich receipt journey details (route/date/passengers) without ever exposing internal notes
@@ -122,6 +135,7 @@ export async function renderAndStoreBillingDocument(
       paymentType: options.paymentType ?? null,
       paymentNote: options.paymentNote ?? null,
       paymentRef: options.paymentRef ?? null,
+      companySettings,
       journey,
     });
   }

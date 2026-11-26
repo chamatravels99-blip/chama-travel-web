@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import BookingForm, { type BookingFormInitialValues } from '@/components/BookingForm';
 import PromoOfferBanner from '@/app/components/PromoOfferBanner';
 import { SERVICE_TYPES, VEHICLES } from '@/lib/constants';
+import { getServerSiteSettings } from '@/lib/server/site-settings';
+import { buildWhatsAppUrl } from '@/lib/site-settings';
 
 export const metadata: Metadata = {
   title: 'Book a Transfer',
@@ -83,7 +86,74 @@ export default async function BookingPage({
 }: {
   searchParams: Promise<BookingSearchParams>;
 }) {
-  const initialValues = parseInitialValues(await searchParams);
+  const [resolvedParams, siteSettings] = await Promise.all([
+    searchParams,
+    getServerSiteSettings(),
+  ]);
+  const initialValues = parseInitialValues(resolvedParams);
+
+  if (!siteSettings.accepting_public_bookings) {
+    const waUrl = buildWhatsAppUrl(
+      siteSettings.whatsapp_number,
+      `Hello ${siteSettings.business_name}, I would like to arrange a booking in Sri Lanka.`
+    );
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <PromoOfferBanner />
+        <main className="px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-200/50 sm:p-12">
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-amber-800 ring-1 ring-amber-200">
+              Direct Concierge Booking
+            </span>
+            <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+              Book Directly via WhatsApp
+            </h1>
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-slate-600 sm:text-base">
+              Online website bookings are temporarily paused while we coordinate peak-season availability. Message our team directly on WhatsApp for instant confirmation and personalized Sri Lanka itineraries!
+            </p>
+
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-[#1fb857] sm:w-auto"
+              >
+                Chat on WhatsApp Now →
+              </a>
+              <Link
+                href="/"
+                className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+              >
+                Back to Home
+              </Link>
+            </div>
+
+            <div className="mt-8 grid gap-3 border-t border-slate-100 pt-6 text-xs text-slate-500 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="font-bold uppercase tracking-wider text-slate-400">24/7 Hotline</p>
+                <a
+                  href={`tel:${siteSettings.primary_phone.replace(/[^+\d]/g, '')}`}
+                  className="mt-1 block text-sm font-bold text-slate-800 hover:text-blue-700"
+                >
+                  {siteSettings.primary_phone}
+                </a>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="font-bold uppercase tracking-wider text-slate-400">Official Email</p>
+                <a
+                  href={`mailto:${siteSettings.contact_email}`}
+                  className="mt-1 block break-all text-sm font-bold text-slate-800 hover:text-blue-700"
+                >
+                  {siteSettings.contact_email}
+                </a>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

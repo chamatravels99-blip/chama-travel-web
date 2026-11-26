@@ -18,8 +18,8 @@ import {
   normalizeGalleryPhoto,
   whatsappActivityLink,
 } from "@/lib/gallery-activities";
-
-const whatsappNumber = "94711114901";
+import { buildWhatsAppUrl } from "@/lib/site-settings";
+import { usePublicSiteSettings } from "@/lib/use-public-site-settings";
 
 const fallbackFeaturedTours: Tour[] = toursData.slice(0, 3);
 
@@ -67,6 +67,10 @@ const googleMapsUrl =
   "https://www.google.com/maps/place/Chama+Travel+%26+Tours/data=!4m7!3m6!1s0x2554543128f9092d:0x2780ba119100211a!8m2!3d7.0815764!4d80.0870175!16s%2Fg%2F11lypjsjpg!19sChIJLQn5KDFUVCURGiEAkRG6gCc";
 
 export default function Home() {
+  const siteSettings = usePublicSiteSettings();
+  const whatsappNumber = siteSettings.whatsapp_number;
+  const activeTripAdvisorUrl = siteSettings.tripadvisor_url || tripAdvisorUrl;
+  const activeGoogleMapsUrl = siteSettings.google_review_url || googleMapsUrl;
   const [featuredTours, setFeaturedTours] = useState<Tour[]>(
     fallbackFeaturedTours,
   );
@@ -244,22 +248,33 @@ export default function Home() {
       {/* ================= HERO ================= */}
       {/* LIGHT DESIGN HERO BANNER */}
       <section id="home" className="relative flex min-h-[60vh] sm:min-h-[70vh] items-center justify-center overflow-hidden pt-28 pb-16">
-        <div className="absolute inset-0 bg-[url('/images/beach.jpg')] bg-cover bg-center" />
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url("${siteSettings.hero_image_url.replace(/"/g, '\\"')}")` }}
+        />
         <div className="absolute inset-0 bg-slate-900/60" />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-50 via-slate-900/40 to-blue-900/20" />
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center">
           <span className="inline-block rounded-full border border-white/30 bg-white/20 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-white backdrop-blur-md shadow-md">
-            Explore Sri Lanka
+            {siteSettings.hero_badge}
           </span>
 
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-white sm:text-6xl animate-fade-in-up">
-            Discover Sri Lanka <br />
-            <span className="text-blue-200 animate-fade-in-up animation-delay-600">With Chama Travels</span>
+            {siteSettings.hero_title.includes(" With ") ? (
+              <>
+                {siteSettings.hero_title.split(" With ")[0]} <br />
+                <span className="text-blue-200 animate-fade-in-up animation-delay-600">
+                  With {siteSettings.hero_title.split(" With ").slice(1).join(" With ")}
+                </span>
+              </>
+            ) : (
+              siteSettings.hero_title
+            )}
           </h1>
 
           <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-slate-100 200 animate-fade-in-up animation-delay-500">
-            Experience beautiful places, unforgettable adventures and comfortable journeys across Sri Lanka with friendly local service.
+            {siteSettings.hero_subtitle}
           </p>
 
           <p className="mt-3 text-xs font-semibold text-blue-200 uppercase tracking-wider animate-fade-in-up animation-delay-300">
@@ -275,7 +290,10 @@ export default function Home() {
             </a>
 
             <a
-              href={`https://wa.me/${whatsappNumber}?text=Hello%20Chama%20Travels%2C%20I%20would%20like%20to%20plan%20a%20trip%20in%20Sri%20Lanka.`}
+              href={buildWhatsAppUrl(
+                whatsappNumber,
+                "Hello Chama Travels, I would like to plan a trip in Sri Lanka.",
+              )}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-full border border-white/40 bg-white/20 px-7 py-3.5 text-sm font-bold text-white backdrop-blur-md transition hover:bg-white hover:text-slate-900"
@@ -775,7 +793,7 @@ export default function Home() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
               <a
-                href={tripAdvisorUrl}
+                href={activeTripAdvisorUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex min-h-11 items-center justify-center rounded-full border border-blue-200 bg-white px-5 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -783,7 +801,7 @@ export default function Home() {
                 Read Reviews on TripAdvisor →
               </a>
               <a
-                href={googleMapsUrl}
+                href={activeGoogleMapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex min-h-11 items-center justify-center rounded-full bg-blue-700 px-5 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
@@ -1078,7 +1096,10 @@ export default function Home() {
       </section>
 {/* Floating WhatsApp Quick Action Button */}
       <a
-        href="https://wa.me/94711114901?text=Hello%20Chama%20Travels%2C%20I%20am%20browsing%20your%20tours%20page%20and%20would%20like%20to%20inquire."
+        href={buildWhatsAppUrl(
+          whatsappNumber,
+          "Hello Chama Travels, I am browsing your website and would like to inquire.",
+        )}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Direct WhatsApp message to Chama Travels"

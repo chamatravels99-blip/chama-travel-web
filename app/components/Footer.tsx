@@ -1,3 +1,8 @@
+'use client';
+
+import { buildWhatsAppUrl } from "@/lib/site-settings";
+import { usePublicSiteSettings } from "@/lib/use-public-site-settings";
+
 const quickLinks = [
   { label: "Home", href: "/#home" },
   { label: "Services", href: "/services" },
@@ -153,6 +158,32 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const siteSettings = usePublicSiteSettings();
+  const telHref = `tel:${siteSettings.primary_phone.replace(/[^+\d]/g, "") || "+94711114901"}`;
+  const waHref = buildWhatsAppUrl(siteSettings.whatsapp_number);
+  const dynamicSocialLinks = socialLinks
+    .map((social) => {
+      if (social.label === "Facebook") {
+        return siteSettings.facebook_url ? { ...social, href: siteSettings.facebook_url } : null;
+      }
+      if (social.label === "Instagram") {
+        return siteSettings.instagram_url ? { ...social, href: siteSettings.instagram_url } : null;
+      }
+      if (social.label === "TripAdvisor") {
+        return siteSettings.tripadvisor_url ? { ...social, href: siteSettings.tripadvisor_url } : null;
+      }
+      if (social.label === "WhatsApp") {
+        return { ...social, href: waHref };
+      }
+      if (social.label === "Google Maps") {
+        return siteSettings.google_review_url
+          ? { ...social, href: siteSettings.google_review_url }
+          : social;
+      }
+      return social;
+    })
+    .filter((item): item is (typeof socialLinks)[number] => item !== null);
+
   return (
     <footer className="bg-zinc-950 px-6 pt-16 pb-8 text-white lg:px-8">
       <div className="mx-auto max-w-7xl">
@@ -162,13 +193,18 @@ export default function Footer() {
           {/* Col 1 — Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="text-2xl font-bold tracking-tight">
-              Chama <span className="font-light text-blue-400">Travels</span>
+              {siteSettings.business_name}
             </div>
             <p className="mt-4 max-w-xs text-sm leading-7 text-zinc-400">
-              Discover Sri Lanka with Chama Travels. Explore unforgettable
-              journeys, beautiful destinations and authentic experiences with a
-              trusted local travel partner.
+              {siteSettings.tagline}. Explore unforgettable journeys, beautiful
+              destinations and authentic experiences with a trusted local travel
+              partner.
             </p>
+            {siteSettings.registration_number && (
+              <p className="mt-2 text-xs text-zinc-500">
+                Reg No: {siteSettings.registration_number}
+              </p>
+            )}
           </div>
 
           {/* Col 2 — Quick Links */}
@@ -217,10 +253,7 @@ export default function Footer() {
                   </svg>
                 </span>
                 <address className="not-italic leading-6">
-                  Sri Lanka<br />
-                  152/1 Kahambilihena,<br />
-                  Udathuththiripitiya,<br />
-                  Gampaha 11054
+                  {siteSettings.office_address}
                 </address>
               </li>
 
@@ -242,10 +275,10 @@ export default function Footer() {
                   </svg>
                 </span>
                 <a
-                  href="mailto:Info@chamatravels.com"
+                  href={`mailto:${siteSettings.contact_email}`}
                   className="break-all transition hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
-                  Info@chamatravels.com
+                  {siteSettings.contact_email}
                 </a>
               </li>
 
@@ -268,13 +301,13 @@ export default function Footer() {
                 </span>
                 <div className="flex flex-col gap-0.5">
                   <a
-                    href="tel:+94711114901"
+                    href={telHref}
                     className="transition hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
-                    +94 711 114 901
+                    {siteSettings.primary_phone}
                   </a>
                   <a
-                    href="https://wa.me/94711114901"
+                    href={waHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-zinc-500 transition hover:text-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -292,7 +325,7 @@ export default function Footer() {
               Follow Us
             </h3>
             <div className="mt-5 flex flex-wrap items-center gap-2 sm:gap-2.5">
-              {socialLinks.map((social) => (
+              {dynamicSocialLinks.map((social) => (
                 <a
                   key={social.label}
                   href={social.href}

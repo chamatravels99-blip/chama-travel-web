@@ -15,14 +15,26 @@ export const DEFAULT_INVOICE_CUSTOMER_NOTE =
 export const DEFAULT_RECEIPT_CUSTOMER_NOTE =
   'Payment received with thanks. Thank you for choosing Chama Travel & Tours for your journey in Sri Lanka!';
 
+export interface BillingCompanySettings {
+  businessName?: string | null;
+  officeAddress?: string | null;
+  primaryPhone?: string | null;
+  contactEmail?: string | null;
+  registrationNumber?: string | null;
+  bankAccountDetails?: string | null;
+  invoiceFooterNote?: string | null;
+}
+
 export interface InvoiceRenderOptions {
   invoiceNote?: string | null;
+  companySettings?: BillingCompanySettings | null;
 }
 
 export interface ReceiptRenderOptions {
   paymentType?: 'full' | 'advance' | 'part' | string | null;
   paymentNote?: string | null;
   paymentRef?: string | null;
+  companySettings?: BillingCompanySettings | null;
   journey?: {
     service_type?: string | null;
     journey_type?: string | null;
@@ -260,8 +272,16 @@ function drawStatusPill(
 function drawBrandedFooter(
   pages: PDFPage[],
   fontRegular: PDFFont,
-  fontBold: PDFFont
+  fontBold: PDFFont,
+  companySettings?: BillingCompanySettings | null
 ) {
+  const companyName = str(companySettings?.businessName, COMPANY_NAME);
+  const companyPhone = str(companySettings?.primaryPhone, COMPANY_PHONE);
+  const companyEmail = str(companySettings?.contactEmail, COMPANY_EMAIL);
+  const footerLead = str(
+    companySettings?.invoiceFooterNote,
+    `Thank you for traveling with ${companyName}!`
+  );
   const totalPages = pages.length;
   pages.forEach((page, index) => {
     const dividerY = 44;
@@ -273,12 +293,12 @@ function drawBrandedFooter(
     });
 
     const footerMain = sanitizePdfText(
-      `Thank you for traveling with ${COMPANY_NAME}!  ·  24/7 Hotline: ${COMPANY_PHONE}  ·  ${COMPANY_EMAIL}`
+      `${footerLead}  ·  24/7 Hotline: ${companyPhone}  ·  ${companyEmail}`
     );
     page.drawText(footerMain, {
       x: MARGIN_X,
       y: 28,
-      size: 8,
+      size: 7.8,
       font: fontBold,
       color: COLOR_SLATE_700,
     });
@@ -307,6 +327,7 @@ async function drawBrandedHeader(params: {
   bookingRef: string;
   paymentStatusLabel: string;
   paymentStatusVariant: 'paid' | 'partial' | 'unpaid';
+  companySettings?: BillingCompanySettings | null;
 }): Promise<{ leftY: number; rightBottomY: number }> {
   const {
     pdfDoc,
@@ -320,7 +341,18 @@ async function drawBrandedHeader(params: {
     bookingRef,
     paymentStatusLabel,
     paymentStatusVariant,
+    companySettings,
   } = params;
+
+  const companyName = str(companySettings?.businessName, COMPANY_NAME);
+  const companyAddress = str(companySettings?.officeAddress, COMPANY_ADDRESS);
+  const companyPhone = str(companySettings?.primaryPhone, COMPANY_PHONE);
+  const companyEmail = str(companySettings?.contactEmail, COMPANY_EMAIL);
+  const registrationNumber =
+    typeof companySettings?.registrationNumber === 'string' &&
+    companySettings.registrationNumber.trim()
+      ? companySettings.registrationNumber.trim()
+      : null;
 
   const topY = PAGE_HEIGHT - MARGIN_TOP;
   const accentColor = docType === 'receipt' ? COLOR_EMERALD : COLOR_BLUE;
@@ -363,7 +395,7 @@ async function drawBrandedHeader(params: {
   });
   leftY -= 12;
 
-  page.drawText(sanitizePdfText(COMPANY_NAME), {
+  page.drawText(sanitizePdfText(companyName), {
     x: MARGIN_X,
     y: leftY,
     size: 11,
@@ -372,7 +404,7 @@ async function drawBrandedHeader(params: {
   });
   leftY -= 12.5;
 
-  const addrLines = wrapText(COMPANY_ADDRESS, fontRegular, 8, leftColWidth);
+  const addrLines = wrapText(companyAddress, fontRegular, 8, leftColWidth);
   for (const line of addrLines) {
     page.drawText(line, {
       x: MARGIN_X,
@@ -384,7 +416,7 @@ async function drawBrandedHeader(params: {
     leftY -= 10.5;
   }
 
-  page.drawText(sanitizePdfText(`Phone / WhatsApp: ${COMPANY_PHONE}`), {
+  page.drawText(sanitizePdfText(`Phone / WhatsApp: ${companyPhone}`), {
     x: MARGIN_X,
     y: leftY,
     size: 8,
@@ -393,14 +425,26 @@ async function drawBrandedHeader(params: {
   });
   leftY -= 10.5;
 
-  page.drawText(sanitizePdfText(`Email: ${COMPANY_EMAIL}  |  Web: ${COMPANY_WEBSITE}`), {
+  page.drawText(sanitizePdfText(`Email: ${companyEmail}  |  Web: ${COMPANY_WEBSITE}`), {
     x: MARGIN_X,
     y: leftY,
     size: 8,
     font: fontRegular,
     color: COLOR_SLATE_500,
   });
-  leftY -= 14;
+  leftY -= 10.5;
+
+  if (registrationNumber) {
+    page.drawText(sanitizePdfText(`Reg / SLTDA No: ${registrationNumber}`), {
+      x: MARGIN_X,
+      y: leftY,
+      size: 7.8,
+      font: fontRegular,
+      color: COLOR_SLATE_500,
+    });
+    leftY -= 10.5;
+  }
+  leftY -= 3.5;
 
   // 2. Top-right Document Title Badge + Metadata (unchanged)
   const rightX = PAGE_WIDTH - MARGIN_X;
@@ -679,7 +723,7 @@ export async function renderInvoicePdf(
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`Invoice ${str(snapshot.invoice_number)}`);
-  pdfDoc.setAuthor(COMPANY_NAME);
+  pdfDoc.setAuthor(str(options.companySettings?.businessName, COMPANY_NAME));
 
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -709,6 +753,7 @@ export async function renderInvoicePdf(
     bookingRef: str(booking.booking_ref),
     paymentStatusLabel: statusLabel,
     paymentStatusVariant: statusVariant,
+    companySettings: options.companySettings,
   });
 
   // Build route summary from legs
@@ -956,25 +1001,53 @@ export async function renderInvoicePdf(
 
   cursorY = totalsBottom - 16;
 
-  // Payment Information Card (No dummy bank account numbers)
-  ensureSpace(95);
+  // Payment Information Card (with dynamic bank account details when configured)
+  const bankDetailLines =
+    typeof options.companySettings?.bankAccountDetails === 'string' &&
+    options.companySettings.bankAccountDetails.trim()
+      ? options.companySettings.bankAccountDetails
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : [];
+
+  const paymentCardBodyLines: Array<{ label?: string; text: string; bold?: boolean }> =
+    bankDetailLines.length > 0
+      ? [
+          {
+            label: 'Accepted Payment Methods',
+            text: 'Cash on Arrival  |  Bank Transfer (details below)',
+            bold: true,
+          },
+          ...bankDetailLines.map((line, index) => ({
+            ...(index === 0 ? { label: 'Bank Transfer Details' } : {}),
+            text: line,
+          })),
+          {
+            label: 'Payment Terms',
+            text: 'Advance payment confirms your reservation; remaining balance payable prior to or upon tour commencement.',
+          },
+        ]
+      : [
+          {
+            label: 'Accepted Payment Methods',
+            text: 'Cash on Arrival  |  Bank Transfer (bank details shared upon request)',
+            bold: true,
+          },
+          {
+            label: 'Payment Terms',
+            text: 'Advance payment confirms your reservation; remaining balance payable prior to or upon tour commencement.',
+          },
+        ];
+
+  ensureSpace(95 + bankDetailLines.length * 14);
   cursorY = drawBoxedCard({
     page,
     startY: cursorY,
     x: MARGIN_X,
     width: CONTENT_WIDTH,
     title: 'PAYMENT INFORMATION & TERMS',
-    bodyLines: [
-      {
-        label: 'Accepted Payment Methods',
-        text: 'Cash on Arrival  |  Bank Transfer (bank details shared upon request)',
-        bold: true,
-      },
-      {
-        label: 'Payment Terms',
-        text: 'Advance payment confirms your reservation; remaining balance payable prior to or upon tour commencement.',
-      },
-    ],
+    bodyLines: paymentCardBodyLines,
     fontRegular,
     fontBold,
     bgColor: COLOR_BLUE_LIGHT,
@@ -1003,7 +1076,7 @@ export async function renderInvoicePdf(
     titleColor: COLOR_NAVY,
   });
 
-  drawBrandedFooter(pdfDoc.getPages(), fontRegular, fontBold);
+  drawBrandedFooter(pdfDoc.getPages(), fontRegular, fontBold, options.companySettings);
   return pdfDoc.save();
 }
 
@@ -1022,7 +1095,7 @@ export async function renderReceiptPdf(
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(`Payment Receipt ${str(snapshot.receipt_number)}`);
-  pdfDoc.setAuthor(COMPANY_NAME);
+  pdfDoc.setAuthor(str(options.companySettings?.businessName, COMPANY_NAME));
 
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -1047,6 +1120,7 @@ export async function renderReceiptPdf(
     bookingRef: str(snapshot.booking_ref || bookingObj.booking_ref),
     paymentStatusLabel: statusLabel,
     paymentStatusVariant: statusVariant,
+    companySettings: options.companySettings,
   });
 
   const leftRows: Array<{ label: string; value: string; bold?: boolean }> = [
@@ -1309,7 +1383,7 @@ export async function renderReceiptPdf(
     titleColor: COLOR_NAVY,
   });
 
-  drawBrandedFooter(pdfDoc.getPages(), fontRegular, fontBold);
+  drawBrandedFooter(pdfDoc.getPages(), fontRegular, fontBold, options.companySettings);
   return pdfDoc.save();
 }
 
